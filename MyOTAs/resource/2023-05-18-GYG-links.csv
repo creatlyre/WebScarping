@@ -1,0 +1,337 @@
+a,a
+Global,Global
+entryTicket,Entry tickets
+guidedTour,Guided tours
+dayTrip,Day trips
+privateTour,Private tours
+other,Other experiences
+transfer,Transfers
+workshopOrClass,Workshops & classes
+adventure,Adventures
+waterActivity,Water activities
+multiDayTrip,Multi-day trips
+hopOnHopOff,Hop-on hop-off tours
+cityCard,City cards
+local_culture,Local culture
+art,Art
+architecture,Architecture
+city_sightseeing,City sightseeing
+food,Food
+outdoor,Outdoor
+tasting,Tasting
+wine_tasting,Wine tasting
+drinks,Drinks
+religion,Religion
+activities_for_couples,Activities for couples
+children_s_activities,Children's activities
+plaza_square,Squares & plazas
+religious,Religious sites
+gallery,Galleries
+museum,Museums
+bridge,Bridges
+monument,Monuments
+historic_and_archeological,Historic ruins & archaeological sites
+castle_or_palace,Castles & palaces
+tower,Towers & viewing platforms
+cemetery,Cemeteries & mausoleums
+van,Van
+bus_coach,Bus / coach
+car,Car
+train,Train
+bicycle,Bike
+ferry,Ferry
+electric_bicycle,Electric bike
+golf_cart,Golf cart
+scooter,Scooter
+motorcycle,Motorcycle
+5000,Florence Duomo Complex
+3953,Uffizi Gallery
+3955,Ponte Vecchio
+4746,Accademia Gallery
+3962,Piazza della Signoria
+3956,Palazzo Vecchio
+3957,Pitti Palace
+2975,Tower of Pisa
+4836,Piazza della Repubblica
+4786,Square of Miracles
+697,Positano
+699,Amalfi
+162,Naples
+391,Sorrento
+156880,Pompei
+709,Ravello
+2168,Praiano
+33,Rome
+163301,Nerano
+144977,Conca dei Marini
+bundle,Bundles
+2697,Anne Frank House
+3405,Dam Square
+3003,The Amstel
+2696,Rijksmuseum
+7574,Magere Brug
+7575,Westerkerk
+5095,Prinsengracht
+3021,Royal Palace
+106127,Schiphol Airport
+4319,Oude Kerk
+3763,Acropolis of Athens
+3766,Acropolis Museum
+5087,Panathenaic Stadium
+3772,Temple of Olympian Zeus
+15524,Meteora
+108582,Athens International Airport
+3767,Syntagma Square
+121975,Corinth Canal
+15535,Delphi Archaeological Site
+16124,National Garden
+2699,Sagrada Familia
+24689,Barcelona Port
+3060,Port Vell
+3027,Casa Batlló
+22751,Olympic Port
+3037,Passeig de Gracia
+3032,Park Güell
+22708,Arc de Triomf
+3038,Casa Mila
+3047,Parc de la Ciutadella
+3089,Brandenburg Gate
+2702,Berlin Wall
+2701,Reichstag
+3413,Checkpoint Charlie
+3420,Potsdamer Platz
+3097,Berlin Cathedral
+3088,Gendarmenmarkt
+3411,Alexanderplatz
+3087,Holocaust Memorial
+4285,TV Tower
+148180,Cancun International Airport
+1078,Isla Mujeres
+785,Chichén Itzá
+163544,Tulum National Park
+4506,Coba
+127098,Nichupté Lagoon
+4510,Cenote Ik Kil
+158874,Cancún Underwater Museum
+87612,Aquaworld Cancun
+165548,Xel-Ha Archaeological Site
+3342,The Palm Jumeirah
+3309,Burj Al Arab
+128278,Atlantis
+2703,Burj Khalifa
+2704,Dubai Creek
+14637,Dubai Spice Souk
+115372,Lahbab Desert
+4841,Dubai Gold Souk
+3312,Dubai Desert Conservation Reserve
+165284,Ain Dubai
+4550,Cliffs of Moher
+3544,Dublin Castle
+15552,Trinity College Dublin
+3543,Guinness Storehouse
+5082,St Patrick's Cathedral
+3550,Christ Church Cathedral
+4648,Blarney Castle
+109777,Giant's Causeway
+4552,The Burren
+91752,Dublin Airport
+4458,Lokrum
+4459,Walls of Dubrovnik
+4463,Koločep
+9026,Lopud Island
+4466,Lovrijenac
+164802,Rector's Palace
+164319,Pile Gate
+157845,Dubrovnik Airport
+4461,Sipan
+9063,Srđ
+1886,Loch Ness
+2594,Royal Mile
+36443,Eilean Donan Castle
+2592,Edinburgh Castle
+93044,The Great Glen
+2599,Stirling Castle
+36324,Ben Nevis
+2593,Loch Lomond
+92591,Cairngorms
+4976,Doune Castle
+2705,Hagia Sophia
+3533,Sultan Ahmed Mosque
+3534,Topkapi Palace
+3535,Grand Bazaar
+25615,Bosphorus Strait
+25428,Sultanahmet Square
+3948,Dolmabahce Palace
+27813,Bosphorus Bridge
+163973,Istanbul Airport
+27845,Golden Horn
+1069,Memorial and Museum Auschwitz-Birkenau
+4139,Wieliczka Salt Mine
+4140,Wawel Hill
+5084,Oskar Schindler's Factory
+4144,Main Market Square
+4142,Wawel Royal Castle
+4147,Wawel Cathedral
+5081,St. Mary's Basilica
+5127,Old Synagogue
+89852,Kraków Airport
+4744,Antelope Canyon
+3905,Hoover Dam
+95984,Grand Canyon National Park
+1511,Lake Powell
+34292,Bryce Canyon National Park
+32179,Zion National Park
+92786,Horseshoe Bend
+18107,"Colorado River, Arizona"
+3904,Death Valley National Park
+116387,Grand Canyon West Rim
+3590,Belem Tower
+4825,Tagus River
+4792,Commerce Square
+4801,Monument to the Discoveries
+3594,Jerónimos Monastery
+3593,25 de Abril Bridge
+4788,Pena Palace
+4794,Lisbon Cathedral
+2284,Cabo da Roca
+4800,Rossio Square
+2706,Buckingham Palace
+2707,River Thames
+3408,Trafalgar Square
+2710,Westminster Abbey
+2709,Big Ben
+2708,Tower of London
+4357,Houses of Parliament
+2713,Tower Bridge
+34745,Heathrow Airport
+2717,St Paul's Cathedral
+3611,Royal Palace
+2773,Museo del Prado
+3615,Plaza Mayor
+5006,Puerta del Sol
+3614,Retiro Park
+7298,Almudena Cathedral
+36943,Toledo Cathedral
+29043,Plaza de Oriente
+3450,Museo Nacional Centro de Arte Reina Sofía
+4907,Plaza de la Villa
+96148,Milan Malpensa Airport
+3580,Milan Cathedral
+3582,Sforza Castle
+3581,Teatro alla Scala
+3587,Duomo Square
+115597,Santa Maria delle Grazie
+3584,Galleria Vittorio Emanuele II
+21653,Piazza Della Scala
+63,Lake Como
+5108,Royal Palace
+685,Pompeii
+689,Mount Vesuvius
+17718,Piazza del Plebiscito
+3795,Castel Nuovo
+96157,Naples International Airport
+687,Archaeological Site of Herculaneum
+3800,Naples Cathedral
+3794,Royal Palace
+86030,Blue Grotto
+164234,Gulf of Naples
+2612,Statue of Liberty
+3929,Brooklyn Bridge
+2614,Central Park
+4858,One World Trade Center
+2608,Empire State Building
+3932,Ellis Island
+2615,Times Square
+158494,Hudson River
+3927,The Battery
+3521,New York Harbor
+hostedTicket,Entry tickets with host
+3224,Louvre Museum
+2600,Eiffel Tower
+2601,Seine River
+3230,Notre Dame Cathedral
+4383,Place de la Concorde
+317,Palace of Versailles
+2976,Musée d'Orsay
+3245,Sacre-Coeur Basilica
+3238,Arc de Triomphe
+2603,Disneyland Paris
+4071,Douro River
+4079,Porto Cathedral
+4951,São Bento Station
+4077,Clérigos Church
+4076,Livraria Lello & Irmao
+4962,Ribeira Square
+88186,Arrábida Bridge
+4075,Dom Luis Bridge
+158635,Porto International Airport
+4078,Palacio da Bolsa
+2619,Colosseum
+2618,Roman Forum
+2738,Vatican Museums
+2617,St. Peter's Basilica
+2622,Palatine Hill
+2897,Pantheon
+2899,Piazza Navona
+2898,Trevi Fountain
+2906,Spanish Steps
+2903,Circus Maximus
+4214,Palermo Cathedral
+4211,Teatro Massimo
+96166,Palermo / Falcone Borsellino Airport
+4217,Quattro Canti
+136398,Vucciria Market
+150446,Leonardo da Vinci–Fiumicino Airport
+167629,Treviso Airport
+167954,Genoa Airport
+3474,Ciampino–G. B. Pastine International Airport
+4219,Palatine Chapel
+3933,Piazza San Marco
+3935,Doge's Palace
+3934,Saint Mark's Basilica
+3936,Rialto Bridge
+2724,Grand Canal
+2963,Teatro La Fenice
+4916,Santa Maria Formosa
+19413,Venetian Lagoon
+88138,Marco Polo Airport
+5085,St. Mark's Campanile
+1901,Mount Etna
+121965,Rifugio Sapienza
+96580,Alcantara River
+173402,Palazzo Corvaja
+56148,Ancient Theater of Taormina
+130908,Gole dell'Alcantara
+160730,Alcantara National Park
+164351,"Valle del Bove, Italy"
+143170,Porta Catania
+130903,Etna Park
+148370,Marina Grande
+130723,Marina Piccola
+130718,Faraglioni
+130708,Grotta Bianca
+164259,Sorrento Peninsula
+167059,Marina Grande
+88144,Amalfi Cathedral
+115242,Silvestri Craters
+121970,Cratere Centrale dell'Etna
+130898,Grotta dei Tre Livelli
+130893,Oro d'Etna
+4101,Villa of the Mysteries
+4102,House of the Vettii
+90608,Amphitheater of Pompeii
+4103,House of the Faun
+4104,Temple of Apollo
+128083,Foro Civile di Pompei
+127518,Lupanare
+4108,House of the Tragic Poet
+128033,Terme Stabiane
+127498,Casa di Nettuno ed Anfitrite
+127503,Casa dei Cervi
+128028,Casa del Salone Nero
+128023,Sacellum of The Augustales
+127508,House of Skeletons
+164116,"Casa dell'Albergo, Herculaneum"
+128038,Large Theatre
+128103,Forum Baths
+90599,House of the Golden Cupids
