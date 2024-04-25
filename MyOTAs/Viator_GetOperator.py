@@ -12,10 +12,10 @@ from selenium.webdriver.common.keys import Keys
 import numpy as np
 import datetime
 from selenium.webdriver.common.action_chains import ActionChains
-import xlsxwriter
 from openpyxl import Workbook, load_workbook
 import os
 import shutil
+from io import StringIO
 import logging
 import traceback
 import re
@@ -43,6 +43,7 @@ file_path_output = fr"{output_viator}/AllLinksViator - {date_today}.xlsx"
 file_path_output_processed = fr"{output_viator}/All Links Viator - {date_today}.xlsx"
 file_path_output_processed_csv = fr"{output_viator}/All Links Viator - {date_today}.csv"
 file_path_csv_operator = fr"G:\.shortcut-targets-by-id\1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2\MyOTAs\Pliki firmowe\Operators_Groups.csv"
+file_path_xlsx_operator = fr"G:\.shortcut-targets-by-id\1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2\MyOTAs\Pliki firmowe\Operators_Groups.xlsx"
 file_path_all_links_send_to_scraper = fr"{output_viator}\SupplierExtract - {date_today}.csv"
 file_path_all_links_send_to_scraper_finished = fr"{output_viator}\SupplierExtractFinished - {date_today}.csv"
 link_file = fr'G:/.shortcut-targets-by-id/1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2/MyOTAs/Baza Excel/Resource/Viator_links.csv'
@@ -94,6 +95,8 @@ mapping_currency = {'COP\xa0': 'COP (Colombian Peso)', 'HK$': 'HKD (Hong Kong Do
 
 currency_list = []
 API_KEY = '8c36bc42cd11c738c1baad3e2000b40c'
+API_KEY_ZENROWS = '56ed5b7f827aa5c258b3f6d3f57d36999aa949e8' # https://app.zenrows.com/buildera
+
 
 # %%
 EUR_City = [
@@ -187,8 +190,7 @@ logging.basicConfig(level=logging.INFO,
                                logging.StreamHandler()])
 
 
-
-class Scraper:
+class Scraper_API:
 #     with open("config.json", 'r', encoding='utf-8') as file:
 #         config = json.load(file)
 #     api_key = config['api_key']
@@ -203,9 +205,12 @@ class Scraper:
         self.recursive_calls = 0
         logging.info("Scraper initialized with API key and file paths.")
 
-    def _load_dataframe(self, file_path):
+    def _load_dataframe_csv(self, file_path):
         """Load data from CSV into a dataframe."""
         return pd.read_csv(file_path)
+    def _load_dataframe_xlsx(self, file_path):
+        """Load data from CSV into a dataframe."""
+        return pd.read_excel(file_path)
 
     def _save_dataframe(self, df, file_path, header=True, mode='w'):
         """Save dataframe to CSV."""
@@ -214,7 +219,7 @@ class Scraper:
     def send_url_to_process_supplier_name(self):
         """Send URLs to the processing service and update the CSV with the response."""
         # Load dataframe to process
-        dataframe_to_process = self._load_dataframe(self.file_path_csv_operator)
+        dataframe_to_process = self._load_dataframe_xlsx(self.file_path_csv_operator)
         dataframe_to_process = dataframe_to_process[dataframe_to_process['Operator'] == 'ToDo']
 
         # Load the already processed URLs if file exists
@@ -277,7 +282,7 @@ class Scraper:
 
     def check_status_and_add_to_file_path(self):
         """Check the status of URLs and update the CSV."""
-        all_links = self._load_dataframe(self.file_path_all_links_send_to_scraper)
+        all_links = self._load_dataframe_csv(self.file_path_all_links_send_to_scraper)
 #         print('all_links in check_status_and_add_to_file_path')
 #         display(all_links)
         df_links = all_links[all_links['Status'] == 'running']
@@ -300,7 +305,6 @@ class Scraper:
                     if status == 'finished':
                         del futures[future]
                         logging.info(f"Finished processing URL: {url}. Left to process: {len(df_links[df_links['Status'] == 'running'])}") 
-
                     else:
                         logging.debug(f"URL: {url} is still runningm Rows to process{len(df_links[df_links['Status'] == 'running'])}")
                     
@@ -351,10 +355,9 @@ class Scraper:
         
     def extract_supplier_name(self):
         """Extract supplier name from the URLs and update the CSV."""
-        all_links_df = self._load_dataframe(self.file_path_all_links_send_to_scraper)
-        operator_csv = self._load_dataframe(self.file_path_csv_operator)
+        all_links_df = self._load_dataframe_csv(self.file_path_all_links_send_to_scraper)
+        operator_csv = self._load_dataframe_xlsx(self.file_path_csv_operator)
         df = all_links_df[(all_links_df['Status'] == 'finished') & (all_links_df['Operator'] == 'ToDo')]
-        counter = 1
         counter = 1
         # Preparing session for HTTPS requests
         session = requests.Session()
@@ -373,8 +376,7 @@ class Scraper:
                 self._save_dataframe(operator_csv, self.file_path_csv_operator)
 
         self._save_dataframe(all_links_df, self.file_path_all_links_send_to_scraper)
-        self._save_dataframe(operator_csv, self.file_path_csv_operator)
-    
+        self._save_dataframe(operator_csv, self.file_path_csv_operator)    
 
     def _get_supplier_name_from_url(self, session, url):
         """Extract the supplier name from a given URL."""
@@ -394,28 +396,157 @@ class Scraper:
 
 
 
+# %% [markdown]
+# 
+
+# %%
+# Setting up logging configuration
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s [%(levelname)s] - %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S',
+                    handlers=[logging.FileHandler('viator_getoperator.log'),
+                              logging.StreamHandler()])
+
+class Scraper:
+    def __init__(self, api_key, file_path_csv_operator, file_path_all_links_send_to_scraper):
+        self.API_KEY = api_key
+        self.file_path_csv_operator = file_path_csv_operator
+        self.file_path_all_links_send_to_scraper = file_path_all_links_send_to_scraper
+        logging.info("Scraper initialized with API key and file paths.")
+
+    def _load_dataframe_csv(self, file_path):
+        with open(file_path, 'rb') as file:
+            binary_content = file.read()
+
+        # Decode the binary content, ignoring undecodable characters
+        decoded_content = binary_content.decode('utf-8', errors='ignore')
+
+        # Use StringIO to turn the decoded content into a stream
+        data_stream = StringIO(decoded_content)
+
+        # Read the stream into a DataFrame
+        df = pd.read_csv(data_stream)
+        return df
+
+    def _load_dataframe_xlsx(self, file_path):
+        return pd.read_excel(file_path)
+
+    def _save_dataframe(self, df, file_path, header=True, mode='w'):
+        df.to_csv(file_path, index=False, header=header, mode=mode)
+
+    def send_url_to_process_supplier_name(self):
+        """Process URLs using the updated ZenRows-based API interaction method."""
+        dataframe_to_process = self._load_dataframe_csv(self.file_path_csv_operator)
+        dataframe_to_process = dataframe_to_process[dataframe_to_process['Operator'] == 'ToDo']
+
+        # Check if there are already processed URLs
+        if os.path.exists(self.file_path_all_links_send_to_scraper):
+            processed_data = self._load_dataframe_csv(self.file_path_all_links_send_to_scraper)
+            processed_urls = processed_data['UrlRequest'].unique()
+        else:
+            processed_urls = []
+
+        # Filter out URLs that have already been processed
+        dataframe_to_process = dataframe_to_process[~dataframe_to_process['Link'].isin(processed_urls)]
+        processed_count = 1
+        total_url_to_do = len(dataframe_to_process)
+        for _, row in dataframe_to_process.iterrows():
+            url = row['Link']
+            response = self._make_zenrows_request(url)
+            self.extract_supplier_name(response, url)
+            # Log the progress
+            percent_done = (processed_count / total_url_to_do) * 100
+            logging.info(f"Currently processing {processed_count}. Done {percent_done:.2f}%")
+            processed_count += 1
+
+            
+
+    def _make_zenrows_request(self, url):
+        """Send a request to the ZenRows API."""
+        params = {
+            'url': url,
+            'apikey': self.API_KEY,
+            'js_render': 'true',
+            'json_response': 'true',
+            'premium_proxy': 'true'
+        }
+        return requests.get('https://api.zenrows.com/v1/', params=params)
+
+    def extract_supplier_name(self, response, url):
+        """Extract supplier name from the URLs and update the CSV."""
+        # all_links_df = self._load_dataframe_csv(self.file_path_all_links_send_to_scraper)
+        operator_csv = self._load_dataframe_csv(self.file_path_csv_operator)
+        counter = 1
+        # Preparing session for HTTPS requests
+        supplier_name = self._get_supplier_name_from_url(response, url)
+        logging.info(f"Extracted supplier name: {supplier_name} for URL: {url}")
+        operator_csv.loc[operator_csv['Link'] == url, 'Operator'] = supplier_name
+        counter +=1
+        print(counter)
+        if counter % 50 == 0:
+            print(counter, counter % 50)
+            logging.info('Saving files...')
+            self._save_dataframe(operator_csv, self.file_path_csv_operator)
+
+        self._save_dataframe(operator_csv, self.file_path_csv_operator)    
+
+    def _get_supplier_name_from_url(self, response, url):
+        """Extract the supplier name from a given URL."""
+        
+        soup = BeautifulSoup(response.content, 'html.parser')
+        split_supplier = str(soup).split('supplierName')
+        for supplier in split_supplier:
+            try:
+                supplier_name_array = supplier.split('timeZone')
+                if len(supplier_name_array[0]) <= 100:
+                    return ''.join(filter(lambda x: x.isalpha() or x.isspace(), supplier_name_array[0]))
+            except:
+                logging.error('Time zone not found in the extracted supplier details from URL: %s', url)
+        return None
+
 # %%
 # Create an instance of the Scraper class
 def main():
-    scraper = Scraper(api_key=API_KEY, 
+    scraper = Scraper(api_key=API_KEY_ZENROWS, 
                     file_path_csv_operator=file_path_csv_operator, 
                     file_path_all_links_send_to_scraper=file_path_all_links_send_to_scraper)
 
     # Read the operator CSV and get the count of 'ToDo' links
-    operator_csv = pd.read_csv(scraper.file_path_csv_operator)
+    
+    operator_csv = scraper._load_dataframe_csv(scraper.file_path_csv_operator)
     print(f"There are {len(operator_csv[operator_csv['Operator'] == 'ToDo'])} links to do")
 
     # Continue processing as long as there are 'ToDo' links
     while len(operator_csv[operator_csv['Operator'] == 'ToDo']) > 0:
-        print("send_url_to_process_supplier_name")
+        print("send_url_to_process_supplier_name_and_extract_data")
         scraper.send_url_to_process_supplier_name()
-        print("check_status_and_add_to_file_path")
-        scraper.check_status_and_add_to_file_path()
-        print("extract_supplier_name")
-        scraper.extract_supplier_name()
         operator_csv = pd.read_csv(scraper.file_path_csv_operator)
         print(f"There are {len(operator_csv[operator_csv['Operator'] == 'ToDo'])} links to do")
 
+# %%
+# # Create an instance of the Scraper class
+# def main():
+#     scraper = Scraper_API(api_key=API_KEY, 
+#                     file_path_csv_operator=file_path_xlsx_operator, 
+#                     file_path_all_links_send_to_scraper=file_path_all_links_send_to_scraper)
+
+#     # Read the operator CSV and get the count of 'ToDo' links
+#     operator_csv = pd.read_csv(scraper.file_path_csv_operator)
+#     print(f"There are {len(operator_csv[operator_csv['Operator'] == 'ToDo'])} links to do")
+
+#     # Continue processing as long as there are 'ToDo' links
+#     while len(operator_csv[operator_csv['Operator'] == 'ToDo']) > 0:
+#         print("send_url_to_process_supplier_name")
+#         scraper.send_url_to_process_supplier_name()
+#         print("check_status_and_add_to_file_path")
+#         scraper.check_status_and_add_to_file_path()
+#         print("extract_supplier_name")
+#         scraper.extract_supplier_name()
+#         operator_csv = pd.read_csv(scraper.file_path_csv_operator)
+#         print(f"There are {len(operator_csv[operator_csv['Operator'] == 'ToDo'])} links to do")
+
+# %%
+main()
 
 # %%
 

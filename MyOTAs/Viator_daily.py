@@ -12,13 +12,12 @@ from selenium.webdriver.common.keys import Keys
 import numpy as np
 import datetime
 from selenium.webdriver.common.action_chains import ActionChains
-import xlsxwriter
-from openpyxl import Workbook, load_workbook
 import os
 import shutil
 import logging
 import traceback
 import re
+from threading import Lock, current_thread
 from azure.storage.blob import BlobServiceClient
 # from undetected_chromedriver import Chrome, ChromeOptions
 # from user_agent import generate_user_agent
@@ -27,8 +26,7 @@ import random
 import requests
 import json
 import concurrent.futures
-from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.util.retry import Retry
+
 
 # eyJhbGciOiJSUzI1NiIsImtpZCI6IjY3YmFiYWFiYTEwNWFkZDZiM2ZiYjlmZjNmZjVmZTNkY2E0Y2VkYTEiLCJ0eXAiOiJKV1QifQ.eyJuYW1lIjoiV29qdGVrIEJhbG9uIiwicGljdHVyZSI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL0FBY0hUdGZCODM1WVhSalRJeEl4WmxyTnBaRXpWQk9hZmUyMUFmU1dZZXNnUGc9czk2LWMiLCJpc3MiOiJodHRwczovL3NlY3VyZXRva2VuLmdvb2dsZS5jb20vZXhhMi1mYjE3MCIsImF1ZCI6ImV4YTItZmIxNzAiLCJhdXRoX3RpbWUiOjE2ODY2NTg5MDYsInVzZXJfaWQiOiJEcWRXRDhRdloyUTkzcTR4WFhWWlFWUk8wSEMyIiwic3ViIjoiRHFkV0Q4UXZaMlE5M3E0eFhYVlpRVlJPMEhDMiIsImlhdCI6MTY4NjY1OTA2MSwiZXhwIjoxNjg2NjYyNjYxLCJlbWFpbCI6IndvamJhbDNAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsImZpcmViYXNlIjp7ImlkZW50aXRpZXMiOnsiZ29vZ2xlLmNvbSI6WyIxMTUwNTc1NjgzNzI4NjQ1MzA0NTciXSwiZW1haWwiOlsid29qYmFsM0BnbWFpbC5jb20iXX0sInNpZ25faW5fcHJvdmlkZXIiOiJnb29nbGUuY29tIn19.IAOh_U2LXNXGk1jqG3q6m9utI79QVMDtCuUcDBSH5TEKPmMCEdW962qOZN6J8wfMzexHX1cWoqGcXYBmjLcjQKBhhQoAUAdYjxEivrLHe8Hi37bIwXrEX9mvAKD1wE71Sq1sbB3B9xU51lTsH88l7P0pq9LDgbaKkJCljvvzJ186BTbX9Qw0CF4gma1XjJ1W3Nmd0BK2pE9y0b3arF_V8bSME6BeR4Ls1yKLM9da-MCN5y-IkwGVB6j78Qrt-4_emtAhxjkcYlzauOtEM8dZ0NzblgSxY-hdG_sG-Clg0gM6fxXRQSQJYjqHNgwY7sjAP885JUWbtjWjoXKvdJn_iA
 
@@ -48,7 +46,7 @@ from requests.packages.urllib3.util.retry import Retry
 # logs_path = fr'Logs/Viator'
 
 date_today = datetime.date.today().strftime("%Y-%m-%d")
-# date_today = '2024-03-09'
+# date_today = '2024-05-30'
 output_viator = r'G:/.shortcut-targets-by-id/1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2/MyOTAs/Baza Excel/Viator/Daily'
 archive_folder = fr'{output_viator}/Archive'
 file_path_done =fr'{output_viator}/{date_today}-DONE-Viator.csv'  
@@ -91,7 +89,7 @@ mapping_currency = {'COP\xa0': 'COP (Colombian Peso)', 'HK$': 'HKD (Hong Kong Do
 currency_list = []
 API_KEY_SCRAPERAPI = '8c36bc42cd11c738c1baad3e2000b40c' # https://dashboard.scraperapi.com/
 API_KEY_ZENROWS = '56ed5b7f827aa5c258b3f6d3f57d36999aa949e8' # https://app.zenrows.com/buildera
-
+file_write_lock = Lock()
 
 # %%
 # create logger object
@@ -577,29 +575,29 @@ def count_avg_data_required():
     df.to_csv(avg_path_viator, header=True, index=False)
 
 # %%
-##### FOR RE-RUN PREPARATION
-def re_run_daily():
-    global re_run_path
-    global link_file
-    global archive_folder
-    #     re_run_path = fr'output/GYG/2023-05-31-ReRun-GYG.csv'
-    if os.path.exists(re_run_path):
-        df_re_run = pd.read_csv(re_run_path)
-        df_links = pd.read_csv(link_file)
-        mergded_df_re_run = pd.merge(df_links,df_re_run, how='right', on=('City'))
+# ##### FOR RE-RUN PREPARATION
+# def re_run_daily():
+#     global re_run_path
+#     global link_file
+#     global archive_folder
+#     #     re_run_path = fr'output/GYG/2023-05-31-ReRun-GYG.csv'
+#     if os.path.exists(re_run_path):
+#         df_re_run = pd.read_csv(re_run_path)
+#         df_links = pd.read_csv(link_file)
+#         mergded_df_re_run = pd.merge(df_links,df_re_run, how='right', on=('City'))
 
-        for index, row in mergded_df_re_run.iterrows():
-            if row['Category_y'] == 'all':
-                continue
-            if row['Category_y'] != row['MatchCategory']:
-                mergded_df_re_run.drop(index=index, inplace=True)
+#         for index, row in mergded_df_re_run.iterrows():
+#             if row['Category_y'] == 'all':
+#                 continue
+#             if row['Category_y'] != row['MatchCategory']:
+#                 mergded_df_re_run.drop(index=index, inplace=True)
 
-        daily_run_viator(mergded_df_re_run, True)
-    else:
-        print('No missing categories or cities')
+#         daily_run_viator(mergded_df_re_run, True)
+#     else:
+#         print('No missing categories or cities')
 
     
-#     NOT DONE DATA IS NOT BEING INSERTED TO EXCEL FILE
+# #     NOT DONE DATA IS NOT BEING INSERTED TO EXCEL FILE
 
 # %%
 
@@ -639,92 +637,94 @@ def re_run_daily():
 #     return df_links, cities_to_process
 
 # %%
-def send_url_to_process_scraperapi(url_input, city_input, category_input, page = 1, max_pages = 25):
-    global date_today
-    global output_viator
-    global file_path_done
-    global file_path_output
-    global avg_file
-    global re_run_path
-    global folder_path_with_txt_to_count_avg
-    global archive_folder
-    data = []
-    city_path_done = fr'{output_viator}/{date_today}-{city_input}-{category_input}.csv'  
-    if city_input == 'Capri':
-        max_pages = 9
-    elif city_input == 'Taormina':
-        max_pages = 6
-    elif city_input == 'Lisbon' and category_input == 'Global':
-        max_pages = 100
-    elif city_input == 'Porto' and category_input == 'Global' :
-        max_pages = 40
+# def send_url_to_process_scraperapi(url_input, city_input, category_input, page = 1, max_pages = 25):
+#     global date_today
+#     global output_viator
+#     global file_path_done
+#     global file_path_output
+#     global avg_file
+#     global re_run_path
+#     global folder_path_with_txt_to_count_avg
+#     global archive_folder
+#     data = []
+#     city_path_done = fr'{output_viator}/{date_today}-{city_input}-{category_input}.csv'  
+#     if city_input == 'Capri':
+#         max_pages = 9
+#     elif city_input == 'Taormina':
+#         max_pages = 6
+#     elif city_input == 'Lisbon' and category_input == 'Global':
+#         max_pages = 100
+#     elif city_input == 'Porto' and category_input == 'Global' :
+#         max_pages = 40
         
-    if os.path.exists(city_path_done):
-        city_done_msg = pd.read_csv(city_path_done)
-        page = int(city_done_msg.drop_duplicates(subset='City', keep='last')['Page']) + 1
-#         print(f'City: {city_input} category: {category_input} have page done {page} in file {city_path_done}')
+#     if os.path.exists(city_path_done):
+#         city_done_msg = pd.read_csv(city_path_done)
+#         page = int(city_done_msg.drop_duplicates(subset='City', keep='last')['Page']) + 1
+# #         print(f'City: {city_input} category: {category_input} have page done {page} in file {city_path_done}')
         
     
-    url_time = time.time()
-    while page <= max_pages:
-        if page == 1:
-            url = f'{url_input}'
-        else:
-            url = f'{url_input}/{page}'
-        print(url)
+#     url_time = time.time()
+#     while page <= max_pages:
+#         if page == 1:
+#             url = f'{url_input}'
+#         else:
+#             url = f'{url_input}/{page}'
+#         print(url)
 
-        country_codes = [
-            'us',
-            'eu'
-            ]
+#         country_codes = [
+#             'us',
+#             'eu'
+#             ]
 
-        random_country_code = random.choice(country_codes)
+#         random_country_code = random.choice(country_codes)
         
-# CHECK THE TXT FILE FOR DATE-CITY IF THERE IS ANYTHING DONE 
-        print(random_country_code)
-        params = {
-            'url': url,
-            'apikey': API_KEY_ZENROWS,
-            'js_render': 'true',
-            'json_response': 'true',
-            'js_instructions': """[{"click":".selector"},{"wait":500},{"fill":[".input","value"]},{"wait_for":".slow_selector"}]""",
-            'premium_proxy': 'true',
-        }
-        response = requests.get('https://api.zenrows.com/v1/', params=params)
+# # CHECK THE TXT FILE FOR DATE-CITY IF THERE IS ANYTHING DONE 
+#         print(random_country_code)
+#         params = {
+#             'url': url,
+#             'apikey': API_KEY_ZENROWS,
+#             'js_render': 'true',
+#             'json_response': 'true',
+#             'js_instructions': """[{"click":".selector"},{"wait":500},{"fill":[".input","value"]},{"wait_for":".slow_selector"}]""",
+#             'premium_proxy': 'true',
+#         }
+#         response = requests.get('https://api.zenrows.com/v1/', params=params)
 
-        url_request = requests.post(url = 'https://async.scraperapi.com/jobs', 
-                                    json={'apiKey': f'{API_KEY_ZENROWS}', 
-                                          'country_code': random_country_code,
-                                          'url': url })
-#         time.sleep(5)
-        if url_request.status_code == 200:
-            try:
-                print(url_request.json()['statusUrl'])
-                status_url = url_request.json()['statusUrl']
-                data_send_df = pd.DataFrame({
-                    'UrlRequest': [url],
-                    'UrlResponse': [status_url],
-                    'City': [city_input],
-                    'Page': [page],
-                    'Category': category_input
-                }, columns=['UrlRequest', 'UrlResponse', 'City', 'Page', 'Category'])
-                data_send_df.to_csv(city_path_done, header=not os.path.exists(city_path_done), index=False, mode='a')
-            except json.JSONDecodeError:
-                print("JSON could not be decoded")
-        else:
-            print("HTTP request returned code: ", url_request.status_code, "reduced page number from: ", page, " to ", page-1)
-            page -=1
+#         url_request = requests.post(url = 'https://async.scraperapi.com/jobs', 
+#                                     json={'apiKey': f'{API_KEY_ZENROWS}', 
+#                                           'country_code': random_country_code,
+#                                           'url': url })
+# #         time.sleep(5)
+#         if url_request.status_code == 200:
+#             try:
+#                 print(url_request.json()['statusUrl'])
+#                 status_url = url_request.json()['statusUrl']
+#                 data_send_df = pd.DataFrame({
+#                     'UrlRequest': [url],
+#                     'UrlResponse': [status_url],
+#                     'City': [city_input],
+#                     'Page': [page],
+#                     'Category': category_input
+#                 }, columns=['UrlRequest', 'UrlResponse', 'City', 'Page', 'Category'])
+#                 data_send_df.to_csv(city_path_done, header=not os.path.exists(city_path_done), index=False, mode='a')
+#             except json.JSONDecodeError:
+#                 print("JSON could not be decoded")
+#         else:
+#             print("HTTP request returned code: ", url_request.status_code, "reduced page number from: ", page, " to ", page-1)
+#             page -=1
 
 
-# IN THE TEXT FILE ADD URL AND STATUS AND WHICH PAGE IS IT RELATED TO 
+# # IN THE TEXT FILE ADD URL AND STATUS AND WHICH PAGE IS IT RELATED TO 
         
-        page += 1
+#         page += 1
 
 # %%
-def process_html_from_response_zenrows(response, city, category, position = 0):    
+def process_html_from_response_zenrows(response, city, category, position = 0, DEBUG=False):    
     data = []
     soup = BeautifulSoup(response.content, 'html.parser')       
     tours = soup.select("[data-automation*=ttd-product-list-card]")
+    if DEBUG:
+        print(response)
     # Filter these elements to find those that exactly match your target attribute value
     tour_items = [el for el in tours if el.get('data-automation') == r'\"ttd-product-list-card\"']
     print(f"Found {len(tour_items)} elements with exact 'data-automation=ttd-product-list-card' match.")
@@ -734,10 +734,20 @@ def process_html_from_response_zenrows(response, city, category, position = 0):
         #                 page_list = page_pos.split('|')[0].split(':')[1]
         #                 position = int(page_pos.split('|')[1].split(':')[1]) + (page - 1) * 24
             position = position + 1
-            title = tour_item.find('h2').text.strip()
+            if DEBUG:
+                print(tour_item.content)
+            title = tour_item.select_one("[data-automation*=ttd-product-list-card-title]").get_text()
             price_container = tour_item.select_one("[data-automation*=ttd-product-list-card-price]")
             price = price_container.select_one("[class*=currentPrice]").text.strip().split('from')[-1]
-            part_url = tour_item['href'].split('"')[1].split('\\')[0]
+            try:
+                part_url = tour_item.select_one("[data-automation*=ttd-product-list-card-link]").get('href').split('"')[1].split('\\')[0]
+            except:
+                try:
+                    part_url = tour_item['href'].split('"')[1].split('\\')[0]
+                except:
+                    logger_err.error(f"No able to find the HREF for {title}, moving further")
+                    part_url = ""
+                    
             product_url = f"https://www.viator.com{part_url}"
             siteuse = 'Viator'
             try:
@@ -821,354 +831,449 @@ def process_html_from_response_zenrows(response, city, category, position = 0):
     file_path = fr'{output_viator}/{date_today}-{city}-Viator.csv' 
     df.to_csv(file_path, header=not os.path.exists(file_path), index=False, mode='a')
 
+# %%
+
+def process_city(row, thread_name = None):
+    
+    global date_today, output_viator, API_KEY_ZENROWS
+    
+    if thread_name:
+        current_thread().name = thread_name
+    page = 1
+    url_input = row["URL"]
+    city_input = row['City']
+    category_input = row['MatchCategory']
+    max_pages = calculate_max_pages(city_input, category_input)
+
+    city_path_done = fr'{output_viator}/{date_today}-{city_input}-{category_input}.csv'
+    city_path_done_archive = fr'{output_viator}/archive/{date_today}-{city_input}-{category_input}.csv'
+    
+    if os.path.exists(city_path_done):
+        city_done_msg = pd.read_csv(city_path_done)
+        page = int(city_done_msg.drop_duplicates(subset='City', keep='last')['Page'].iloc[0]) + 1
+        logger_info.info(f'Resuming {city_input} from page {page}')
+    elif os.path.exists(city_path_done_archive):
+        logger_done.info('City already in Archive folder moving further')
+        return
+    
+    while page <= max_pages:
+        url = f'{url_input}' if page == 1 else f'{url_input}/{page}'
+        logger_info.info(f'Processing: {city_input}, {category_input}, Page: {page} of max {max_pages}, URL: {url}')
+        response = make_request(url)
+        logger_info.info(current_thread().name)
+        if response and response.status_code == 200:
+            try:
+                save_data(response, city_input, category_input, url, page, city_path_done)
+            except json.JSONDecodeError as e:
+                logger_err.error(f'JSON could not be decoded for URL: {url}, error: {str(e)}')
+                raise
+        else:
+            # Log the error with the status code and response content
+            logger_err.error(f'HTTP request failed for city: {city_input} category: {category_input} page: {page} with status code {response.status_code}  Decrement the page count. Content: {response.content}')
+            page -= 1
+            # Specific handling for 403 and 429 status codes
+            if response.status_code == 403:
+                logger_err.error(f'{current_thread().name}: IP Address Blocked, sleeping for 5 minutes before retrying.')
+                time.sleep(300)  # Wait for 5 minutes before retrying
+            elif response.status_code == 429:
+                logger_err.error(f'{current_thread().name}: Concurrency limit exceeded , sleeping for 5 minutes before retrying.')
+                time.sleep(300)  # Wait for 5 minutes before retrying
+            else:
+                logger_err.error(f'Status code did not set for {response.status_code}')
+        page += 1
+    
+    shutil.move(city_path_done, city_path_done_archive)
+    logger_info.info((f'Archived file to {city_path_done_archive}'))
+
+
+def calculate_max_pages(city_input, category_input):
+    if city_input == 'Capri':
+        return 9
+    if city_input == 'Taormina':
+        return 6
+    if city_input == 'Lisbon' and category_input == 'Global':
+        return 65
+    if city_input == 'Porto' and category_input == 'Global':
+        return 30
+    if city_input == 'Venice' and category_input == 'Global':
+        return 55
+    return 25 if category_input == 'Global' else 2
+
+def make_request(url):
+    params = {
+        'url': url,
+        'apikey': API_KEY_ZENROWS,
+        'js_render': 'true',
+        'json_response': 'true',
+        'js_instructions': """[{"click":".selector"},{"wait":500},{"fill":[".input","value"]},{"wait_for":".slow_selector"}]""",
+        'premium_proxy': 'true',
+    }
+    return requests.get('https://api.zenrows.com/v1/', params=params)
+
+def save_data(response, city_input, category_input, url, page, city_path_done):
+    try:
+        data_send_df = pd.DataFrame({
+            'UrlRequest': [url],
+            'City': city_input,
+            'Page': [page],
+            'Category': category_input
+        }, columns=['UrlRequest', 'City', 'Page', 'Category'])
+        data_send_df.to_csv(city_path_done, header=not os.path.exists(city_path_done), index=False, mode='a')
+        logger_done.info(f'Data for {city_input}-{category_input}, Page {page} saved on disk')
+        process_html_from_response_zenrows(response, city_input, category_input)
+    except json.JSONDecodeError:
+        print("JSON could not be decoded")
+
+def send_url_to_process_zenrows(df_links):
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = {}
+        for index, row in df_links.iterrows():
+            thread_name = f"CityProcessor-{row['City']}-{row['MatchCategory']}-index-{index}"
+            futures[executor.submit(process_city, row, thread_name=thread_name)] = row
+
+        concurrent.futures.wait(futures)
+
+# The rest of your global variables and helper functions should be defined outside of these functions.
+
 
 # %%
-def send_url_to_process_zenrows(df_links):
-    global date_today
-    global output_viator
-    global file_path_done
-    global file_path_output
-    global avg_file
-    global re_run_path
-    global folder_path_with_txt_to_count_avg
-    global archive_folder
+# def send_url_to_process_zenrows(df_links):
+#     global date_today
+#     global output_viator
+#     global file_path_done
+#     global file_path_output
+#     global avg_file
+#     global re_run_path
+#     global folder_path_with_txt_to_count_avg
+#     global archive_folder
 
-    for index, row in df_links.iterrows():
-        print('Row processing: ', index)
-        page = 1
-        url_input = row["URL"]
-        city_input = row['City']
-        category_input = row['MatchCategory']
-        if category_input == 'Global':
-            max_pages = 20
-        else:
-            max_pages = 2
+#     for index, row in df_links.iterrows():
+#         print('Row processing: ', index)
+#         page = 1
+#         url_input = row["URL"]
+#         city_input = row['City']
+#         category_input = row['MatchCategory']
+#         max_pages = calculate_max_pages(city_input, category_input)
 
-        if city_input == 'Capri':
-            max_pages = 9
-        elif city_input == 'Taormina':
-            max_pages = 6
-        elif city_input == 'Lisbon' and category_input == 'Global':
-            max_pages = 65
-        elif city_input == 'Porto' and category_input == 'Global' :
-            max_pages = 30
-
-        city_path_done = fr'{output_viator}/{date_today}-{city_input}-{category_input}.csv'  
-        city_path_done_archive = fr'{output_viator}/archive/{date_today}-{city_input}-{category_input}.csv'  
-        if os.path.exists(city_path_done):
-            city_done_msg = pd.read_csv(city_path_done)
-            page = int(city_done_msg.drop_duplicates(subset='City', keep='last')['Page'].iloc[0]) + 1
-        elif os.path.exists(city_path_done_archive):
-            logger_done.info('City already in Archive folder moving further')
-            df_links = df_links.drop(index)
-            page = max_pages + 1
-            continue
+#         city_path_done = fr'{output_viator}/{date_today}-{city_input}-{category_input}.csv'  
+#         city_path_done_archive = fr'{output_viator}/archive/{date_today}-{city_input}-{category_input}.csv'  
+#         if os.path.exists(city_path_done):
+#             city_done_msg = pd.read_csv(city_path_done)
+#             page = int(city_done_msg.drop_duplicates(subset='City', keep='last')['Page'].iloc[0]) + 1
+#         elif os.path.exists(city_path_done_archive):
+#             logger_done.info('City already in Archive folder moving further')
+#             df_links = df_links.drop(index)
+#             page = max_pages + 1
+#             continue
                         
 
-#         print(f'City: {city_input} category: {category_input} have page done {page} in file {city_path_done}')
+# #         print(f'City: {city_input} category: {category_input} have page done {page} in file {city_path_done}')
         
 
-        while page <= max_pages:
-            if page == 1:
-                url = f'{url_input}'
-            else:
-                url = f'{url_input}/{page}'
-            print(url)
-            page += 1
+#         while page <= max_pages:
+#             if page == 1:
+#                 url = f'{url_input}'
+#             else:
+#                 url = f'{url_input}/{page}'
+#             print(url)
+#             page += 1
             
-    # CHECK THE TXT FILE FOR DATE-CITY IF THERE IS ANYTHING DONE 
-            print(city_input, category_input, url, 'Processing in ZEN')
-            params = {
-                'url': url,
-                'apikey': API_KEY_ZENROWS,
-                'js_render': 'true',
-                'json_response': 'true',
-                'js_instructions': """[{"click":".selector"},{"wait":500},{"fill":[".input","value"]},{"wait_for":".slow_selector"}]""",
-                'premium_proxy': 'true',
-            }
-            response = requests.get('https://api.zenrows.com/v1/', params=params)
-            # time.sleep(5)
-            if response.status_code == 200:
-                    try:
-                        data_send_df = pd.DataFrame({
-                            'UrlRequest': [url],
-                            'City': city_input,
-                            'Page': [page],
-                            'Category': category_input
-                        }, columns=['UrlRequest', 'City', 'Page', 'Category'])
-                        data_send_df.to_csv(city_path_done, header=not os.path.exists(city_path_done), index=False, mode='a')
-                        print('Data saved on disk, processing to extract data')
-                        process_html_from_response_zenrows(response, city_input, category_input)
-                    except json.JSONDecodeError:
-                        print("JSON could not be decoded")
-            else:
-                    print("HTTP request returned code: ", response.status_code, "reduced page number from: ", page, " to ", page+1)
-                    page +=1
-        shutil.move(city_path_done, city_path_done_archive)
-        logger_info.info((f'Archived file to {city_path_done_archive}'))
+#     # CHECK THE TXT FILE FOR DATE-CITY IF THERE IS ANYTHING DONE 
+#             print(city_input, category_input, url, 'Processing in ZEN')
+#             params = {
+#                 'url': url,
+#                 'apikey': API_KEY_ZENROWS,
+#                 'js_render': 'true',
+#                 'json_response': 'true',
+#                 'js_instructions': """[{"click":".selector"},{"wait":500},{"fill":[".input","value"]},{"wait_for":".slow_selector"}]""",
+#                 'premium_proxy': 'true',
+#             }
+#             response = requests.get('https://api.zenrows.com/v1/', params=params)
+#             # time.sleep(5)
+#             if response.status_code == 200:
+#                     try:
+#                         data_send_df = pd.DataFrame({
+#                             'UrlRequest': [url],
+#                             'City': city_input,
+#                             'Page': [page],
+#                             'Category': category_input
+#                         }, columns=['UrlRequest', 'City', 'Page', 'Category'])
+#                         data_send_df.to_csv(city_path_done, header=not os.path.exists(city_path_done), index=False, mode='a')
+#                         print('Data saved on disk, processing to extract data')
+#                         process_html_from_response_zenrows(response, city_input, category_input)
+#                     except json.JSONDecodeError:
+#                         print("JSON could not be decoded")
+#             else:
+#                     print("HTTP request returned code: ", response.status_code, "reduced page number from: ", page, " to ", page-1)
+#                     page -=1
+#         shutil.move(city_path_done, city_path_done_archive)
+#         logger_info.info((f'Archived file to {city_path_done_archive}'))
 
 
-    # IN THE TEXT FILE ADD URL AND STATUS AND WHICH PAGE IS IT RELATED TO 
+#     # IN THE TEXT FILE ADD URL AND STATUS AND WHICH PAGE IS IT RELATED TO 
             
             
 
 # %%
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def get_max_pages(session, url, retries=5, backoff_factor=0.6):
-    retry_wait = backoff_factor
+# def get_max_pages(session, url, retries=5, backoff_factor=0.6):
+#     retry_wait = backoff_factor
     
-    for attempt in range(1, retries + 1):
-        try:
-            results = session.get(url, timeout=10 + (retry_wait) + 5)  # 10 seconds timeout
-            results.raise_for_status()  # Raises an error for 4XX or 5XX status codes
-        except requests.exceptions.HTTPError as http_err:
-            logging.error(f'HTTP error occurred for {url}: {http_err}')
-        except requests.exceptions.ConnectionError as conn_err:
-            logging.error(f'Connection error occurred for {url}: {conn_err}')
-        except requests.exceptions.Timeout as timeout_err:
-            logging.error(f'Timeout error occurred for {url}: {timeout_err}')
-        except requests.exceptions.RequestException as err:
-            logging.error(f'Unexpected error occurred for {url}: {err}')
+#     for attempt in range(1, retries + 1):
+#         try:
+#             results = session.get(url, timeout=10 + (retry_wait) + 5)  # 10 seconds timeout
+#             results.raise_for_status()  # Raises an error for 4XX or 5XX status codes
+#         except requests.exceptions.HTTPError as http_err:
+#             logging.error(f'HTTP error occurred for {url}: {http_err}')
+#         except requests.exceptions.ConnectionError as conn_err:
+#             logging.error(f'Connection error occurred for {url}: {conn_err}')
+#         except requests.exceptions.Timeout as timeout_err:
+#             logging.error(f'Timeout error occurred for {url}: {timeout_err}')
+#         except requests.exceptions.RequestException as err:
+#             logging.error(f'Unexpected error occurred for {url}: {err}')
         
-        if attempt < retries:
-            logging.info(f'Waiting {retry_wait} seconds before retrying...')
-            time.sleep(retry_wait)
-            retry_wait *= 2  # Exponential backoff
+#         if attempt < retries:
+#             logging.info(f'Waiting {retry_wait} seconds before retrying...')
+#             time.sleep(retry_wait)
+#             retry_wait *= 2  # Exponential backoff
             
-    soup = BeautifulSoup(results.content, 'html.parser')
-    product_list_count = None
+#     soup = BeautifulSoup(results.content, 'html.parser')
+#     product_list_count = None
 
-    # Try finding the productListCount label using two different CSS selectors
-    selectors = ["[id*=productListCount]", "h3[class*=productListCount]", "h2[class*=productListCountLabel]"]
+#     # Try finding the productListCount label using two different CSS selectors
+#     selectors = ["[id*=productListCount]", "h3[class*=productListCount]", "h2[class*=productListCountLabel]"]
 
-    for selector in selectors:
-        count_element = soup.select_one(selector)
-        if count_element:
-            product_list_count = int(count_element.text.split()[0].replace(',', ''))
-            break
+#     for selector in selectors:
+#         count_element = soup.select_one(selector)
+#         if count_element:
+#             product_list_count = int(count_element.text.split()[0].replace(',', ''))
+#             break
 
-    if product_list_count is None:
-        print("Product count not found in the HTML content.")
-        return None
-    try:
-        max_pages = int(round(product_list_count / 24, 0))
-        return max_pages
-    except Exception as e:
-        print(f"Error while fetching HTML content: {e}")
-        return 25  # Return a default value of 25 pages if there's an error
+#     if product_list_count is None:
+#         print("Product count not found in the HTML content.")
+#         return None
+#     try:
+#         max_pages = int(round(product_list_count / 24, 0))
+#         return max_pages
+#     except Exception as e:
+#         print(f"Error while fetching HTML content: {e}")
+#         return 25  # Return a default value of 25 pages if there's an error
     
-# Define the get_status function with a retry mechanism
-def get_status(session, url, retries=7, backoff_factor=0.9):
-    retry_wait = backoff_factor
-    for attempt in range(1, retries + 1):
-        try:
-            logging.info(f'Attempt {attempt}: Sending request to {url}')
-            response = session.get(url, timeout=10 + retry_wait + 5)  # 10 seconds timeout
-            response.raise_for_status()  # Raises an error for 4XX or 5XX status codes
-            status = response.json().get('status')
-            logging.info(f'Response received: {url} - Status: {status}')
-            return url, status
-        except requests.exceptions.HTTPError as http_err:
-            logging.error(f'HTTP error occurred for {url}: {http_err}')
-        except requests.exceptions.ConnectionError as conn_err:
-            logging.error(f'Connection error occurred for {url}: {conn_err}')
-        except requests.exceptions.Timeout as timeout_err:
-            logging.error(f'Timeout error occurred for {url}: {timeout_err}')
-        except requests.exceptions.RequestException as err:
-            logging.error(f'Unexpected error occurred for {url}: {err}')
+# # Define the get_status function with a retry mechanism
+# def get_status(session, url, retries=7, backoff_factor=0.9):
+#     retry_wait = backoff_factor
+#     for attempt in range(1, retries + 1):
+#         try:
+#             logging.info(f'Attempt {attempt}: Sending request to {url}')
+#             response = session.get(url, timeout=10 + retry_wait + 5)  # 10 seconds timeout
+#             response.raise_for_status()  # Raises an error for 4XX or 5XX status codes
+#             status = response.json().get('status')
+#             logging.info(f'Response received: {url} - Status: {status}')
+#             return url, status
+#         except requests.exceptions.HTTPError as http_err:
+#             logging.error(f'HTTP error occurred for {url}: {http_err}')
+#         except requests.exceptions.ConnectionError as conn_err:
+#             logging.error(f'Connection error occurred for {url}: {conn_err}')
+#         except requests.exceptions.Timeout as timeout_err:
+#             logging.error(f'Timeout error occurred for {url}: {timeout_err}')
+#         except requests.exceptions.RequestException as err:
+#             logging.error(f'Unexpected error occurred for {url}: {err}')
         
-        if attempt < retries:
-            logging.info(f'Waiting {retry_wait} seconds before retrying...')
-            time.sleep(retry_wait)
-            retry_wait *= 2  # Exponential backoff
+#         if attempt < retries:
+#             logging.info(f'Waiting {retry_wait} seconds before retrying...')
+#             time.sleep(retry_wait)
+#             retry_wait *= 2  # Exponential backoff
 
-    # If all retries fail, return 'error' status
-    logging.error(f'All attempts failed for {url}. Marking status as error.')
-    return url, 'error'
+#     # If all retries fail, return 'error' status
+#     logging.error(f'All attempts failed for {url}. Marking status as error.')
+#     return url, 'error'
 
-def check_status_and_process_city_data(df_links):
-    cities_to_process = []
-    session = requests.Session()
-    statuses = {}
+# def check_status_and_process_city_data(df_links):
+#     cities_to_process = []
+#     session = requests.Session()
+#     statuses = {}
     
     
-    for index, row in df_links.iterrows():
-        city = row['City']
-        category = row['MatchCategory']
-        city_path_done = fr'{output_viator}/{date_today}-{city}-{category}.csv'
+#     for index, row in df_links.iterrows():
+#         city = row['City']
+#         category = row['MatchCategory']
+#         city_path_done = fr'{output_viator}/{date_today}-{city}-{category}.csv'
         
         
-        if os.path.exists(city_path_done):
-            print(city, '-', category)
-            city_done_msg = pd.read_csv(city_path_done)
-            city_done_msg.drop_duplicates(inplace=True)
-        else:
-            continue
+#         if os.path.exists(city_path_done):
+#             print(city, '-', category)
+#             city_done_msg = pd.read_csv(city_path_done)
+#             city_done_msg.drop_duplicates(inplace=True)
+#         else:
+#             continue
             
         
-        start_time_get_resposne = time.time()
-        # Using ThreadPoolExecutor to fetch statuses
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-            future_to_url = {executor.submit(get_status, session, url): url for url in city_done_msg['UrlResponse']}
-            for future in concurrent.futures.as_completed(future_to_url):
-                url = future_to_url[future]
-                try:
-                    _, status = future.result()
-                    statuses[url] = status  # Store the status with the URL as the key
-                except Exception as exc:
-                    logging.error(f'{url} generated an exception: {exc}')
+#         start_time_get_resposne = time.time()
+#         # Using ThreadPoolExecutor to fetch statuses
+#         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+#             future_to_url = {executor.submit(get_status, session, url): url for url in city_done_msg['UrlResponse']}
+#             for future in concurrent.futures.as_completed(future_to_url):
+#                 url = future_to_url[future]
+#                 try:
+#                     _, status = future.result()
+#                     statuses[url] = status  # Store the status with the URL as the key
+#                 except Exception as exc:
+#                     logging.error(f'{url} generated an exception: {exc}')
                     
-         # Update the DataFrame outside of the loop
-        for url, status in statuses.items():
-            city_done_msg.loc[city_done_msg['UrlResponse'] == url, 'Status'] = status
-        end_time_get_resposne = time.time()
-        print(f'First option with concurrent: {round(end_time_get_resposne-start_time_get_resposne,2)}s')
-        print(f"For {city} finished {len(city_done_msg[city_done_msg['Status'] == 'finished'])} from {len(city_done_msg)}")
-        # Check if all statuses are finished
-        if len(city_done_msg[city_done_msg['Status'] == 'finished']) == len(city_done_msg):
-            try:
-                position = df_links[df_links['City'] == city]['Page'] * 24
-            except:
-                position = 0
+#          # Update the DataFrame outside of the loop
+#         for url, status in statuses.items():
+#             city_done_msg.loc[city_done_msg['UrlResponse'] == url, 'Status'] = status
+#         end_time_get_resposne = time.time()
+#         print(f'First option with concurrent: {round(end_time_get_resposne-start_time_get_resposne,2)}s')
+#         print(f"For {city} finished {len(city_done_msg[city_done_msg['Status'] == 'finished'])} from {len(city_done_msg)}")
+#         # Check if all statuses are finished
+#         if len(city_done_msg[city_done_msg['Status'] == 'finished']) == len(city_done_msg):
+#             try:
+#                 position = df_links[df_links['City'] == city]['Page'] * 24
+#             except:
+#                 position = 0
 
-            max_page_for_city = get_max_pages(session, city_done_msg.iloc[0]['UrlResponse'])
-            city_done_msg['MaxPage'] = max_page_for_city
-            process_html_from_response_scraperapi(city_done_msg, city_path_done,  position)
-            df_links = df_links[(df_links['City'] != city) & (df_links['MatchCategory'] != category)]
-            print(f'In check_status_and_process_city_data finished process removing: {city} - {category} ')
+#             max_page_for_city = get_max_pages(session, city_done_msg.iloc[0]['UrlResponse'])
+#             city_done_msg['MaxPage'] = max_page_for_city
+#             process_html_from_response_scraperapi(city_done_msg, city_path_done,  position)
+#             df_links = df_links[(df_links['City'] != city) & (df_links['MatchCategory'] != category)]
+#             print(f'In check_status_and_process_city_data finished process removing: {city} - {category} ')
             
-    return df_links, cities_to_process
+#     return df_links, cities_to_process
 
 
 
 # %%
-def process_html_from_response_scraperapi(data_city_df, city_path_done, position = 0):
-# data_city_df = pd.read_csv(city_path_done)
-    data = []
-### OPTION IF THE BELOW WILL NOT WORK PROPELRY CHECK BELOW   
-    session = requests.Session()  # Using a Session object for connection pooling
+# def process_html_from_response_scraperapi(data_city_df, city_path_done, position = 0):
+# # data_city_df = pd.read_csv(city_path_done)
+#     data = []
+# ### OPTION IF THE BELOW WILL NOT WORK PROPELRY CHECK BELOW   
+#     session = requests.Session()  # Using a Session object for connection pooling
     
-    # Set up retry strategy with backoff factor
-    retries = Retry(total=5, backoff_factor=0.1, status_forcelist=[500, 502, 503, 504])
-    session.mount('http://', HTTPAdapter(max_retries=retries))
-    session.mount('https://', HTTPAdapter(max_retries=retries))
+#     # Set up retry strategy with backoff factor
+#     retries = Retry(total=5, backoff_factor=0.1, status_forcelist=[500, 502, 503, 504])
+#     session.mount('http://', HTTPAdapter(max_retries=retries))
+#     session.mount('https://', HTTPAdapter(max_retries=retries))
 
     
-    for index, row in data_city_df.iterrows():
-        url = row['UrlResponse'].replace(',', '')
+#     for index, row in data_city_df.iterrows():
+#         url = row['UrlResponse'].replace(',', '')
         
-        try:
-            logging.info(f'{index} - Starting request for URL: {url}')
-            start_time = time.time()
-            results = session.get(url, timeout=10)  # Set a reasonable timeout
-            logging.info(F"Time: {time.time() - start_time}")
-            results.raise_for_status()  # This will raise an exception for HTTP error codes
-        except requests.exceptions.RequestException as e:
-            # Handle all requests-related exceptions
-            logging.error(f'Request exception for URL {url}: {e}')        
+#         try:
+#             logging.info(f'{index} - Starting request for URL: {url}')
+#             start_time = time.time()
+#             results = session.get(url, timeout=10)  # Set a reasonable timeout
+#             logging.info(F"Time: {time.time() - start_time}")
+#             results.raise_for_status()  # This will raise an exception for HTTP error codes
+#         except requests.exceptions.RequestException as e:
+#             # Handle all requests-related exceptions
+#             logging.error(f'Request exception for URL {url}: {e}')        
         
-        soup = BeautifulSoup(results.content, 'html.parser')       
-        tour_items = soup.select("[id*=productName]")
+#         soup = BeautifulSoup(results.content, 'html.parser')       
+#         tour_items = soup.select("[id*=productName]")
 
-        if len(tour_items) > 0:
-            for tour_item in tour_items:
-#                 page_pos = tour_item['data-action-page-properties']
-#                 page_list = page_pos.split('|')[0].split(':')[1]
-#                 position = int(page_pos.split('|')[1].split(':')[1]) + (page - 1) * 24
-                position = position + 1
-                title = tour_item.find('h2').text.strip()
-                splitter = tour_item.text.split('From')[-1][0]
-                price = splitter + tour_item.text.split('From')[-1].split(splitter)[1]
-                if len(price) > 9:
-                    price = price.split('Price')[0]
-                part_url = tour_item['data-url'].split('"')[1].split('\\')[0]
-                product_url = f"https://www.viator.com{part_url}"
-                siteuse = 'Viator'
-                city = row['City']
-                category = row['Category']
-                try:
-                    discount = tour_item.find('div', {'class': 'text-special product-list-card-savings-label'}).text.strip()
-                except:
-                    discount = 'N/A'
+#         if len(tour_items) > 0:
+#             for tour_item in tour_items:
+# #                 page_pos = tour_item['data-action-page-properties']
+# #                 page_list = page_pos.split('|')[0].split(':')[1]
+# #                 position = int(page_pos.split('|')[1].split(':')[1]) + (page - 1) * 24
+#                 position = position + 1
+#                 title = tour_item.find('h2').text.strip()
+#                 splitter = tour_item.text.split('From')[-1][0]
+#                 price = splitter + tour_item.text.split('From')[-1].split(splitter)[1]
+#                 if len(price) > 9:
+#                     price = price.split('Price')[0]
+#                 part_url = tour_item['data-url'].split('"')[1].split('\\')[0]
+#                 product_url = f"https://www.viator.com{part_url}"
+#                 siteuse = 'Viator'
+#                 city = row['City']
+#                 category = row['Category']
+#                 try:
+#                     discount = tour_item.find('div', {'class': 'text-special product-list-card-savings-label'}).text.strip()
+#                 except:
+#                     discount = 'N/A'
 
-                amount_reviews = 'N/A'
-                #NUMBER OF REVIEWS
-                spans = tour_item.select('span')
-                for span in spans:
-        #             print('________________________')
-        #             print(span.attrs)
-                    try:
-                        span['reviewlink']
-                        amount_reviews = span.text
-                        break
-                    except:
-                        pass
+#                 amount_reviews = 'N/A'
+#                 #NUMBER OF REVIEWS
+#                 spans = tour_item.select('span')
+#                 for span in spans:
+#         #             print('________________________')
+#         #             print(span.attrs)
+#                     try:
+#                         span['reviewlink']
+#                         amount_reviews = span.text
+#                         break
+#                     except:
+#                         pass
 
-                try:
-                    stars = tour_item.find('svg').text.strip()
-                except:
-                    stars = 'N/A'
+#                 try:
+#                     stars = tour_item.find('svg').text.strip()
+#                 except:
+#                     stars = 'N/A'
 
-                text = tour_item.text.strip()
+#                 text = tour_item.text.strip()
 
 
-                data.append([title,product_url, price, stars, amount_reviews, discount, text, date_today, position, category, siteuse, city ])
-        else:
-            tour_items = soup.select("[class*=productListCardWithDebug]")
-#             print('Running using debug HTML')
-            for tour_item in tour_items:
-                position = position + 1
-                title = tour_item.select_one("[class*=title]").text.strip()
-                price = tour_item.select_one("[class*=currentPrice]").text.strip()
-                if 'from' in price:
-                    price = price.split('from')[1]
-                splitter = price[0]
-                product_url = f"https://www.viator.com{tour_item.find('a')['href']}"
-                siteuse = 'Viator'
-                city = row['City']
-                category = row['Category']
+#                 data.append([title,product_url, price, stars, amount_reviews, discount, text, date_today, position, category, siteuse, city ])
+#         else:
+#             tour_items = soup.select("[class*=productListCardWithDebug]")
+# #             print('Running using debug HTML')
+#             for tour_item in tour_items:
+#                 position = position + 1
+#                 title = tour_item.select_one("[class*=title]").text.strip()
+#                 price = tour_item.select_one("[class*=currentPrice]").text.strip()
+#                 if 'from' in price:
+#                     price = price.split('from')[1]
+#                 splitter = price[0]
+#                 product_url = f"https://www.viator.com{tour_item.find('a')['href']}"
+#                 siteuse = 'Viator'
+#                 city = row['City']
+#                 category = row['Category']
 
-                star ="M7.5 0a.77.77 0 00-.701.456L5.087 4.083a.785.785 0 01-.588.448l-3.827.582a.828.828 0 00-.433 1.395L3.008 9.33c.185.192.26"
-                half ="M14.761 6.507a.828.828 0 00-.433-1.395L10.5 4.53a.785.785 0 01-.589-.447L8.201.456a.767.767 0 00-1.402 0L5.087 4.083a.785"
-                nostar ="M7.5 1.167l1.565 3.317c.242.52.728.885 1.295.974l3.583.544-2.62 2.673a1.782 1.782 0 00-.48 1.532l.609 3.718L8.315 12.2a1.6"
-                try:
-                    discount = tour_item.select_one("[class*=savingsLabel]").text.strip()
-                except:
-                    discount = 'N/A'
-                try:
-                    amount_reviews = tour_item.select_one("[class*=reviewCount]").text.strip()
-                except:
-                    amount_reviews = 'N/A'
-                try:
-                    star_int = 0
-                    stars_grouped = tour_item.select_one("[class*=stars]").find_all('svg')
-                    half_star = 'M14'
-                    for st in stars_grouped:
-                        path_text = str(st.find('path')['d'])
-                        if half_star in path_text:
-                            star_int = star_int + 0.5
-                        else:
-                            if '0a.77.77' in str(st):
-                                star_int = star_int + 1
-                    stars = f'star-{str(star_int)}'
-                except:
-                    stars = 'N/A'
-                text = tour_item.text.strip()
+#                 star ="M7.5 0a.77.77 0 00-.701.456L5.087 4.083a.785.785 0 01-.588.448l-3.827.582a.828.828 0 00-.433 1.395L3.008 9.33c.185.192.26"
+#                 half ="M14.761 6.507a.828.828 0 00-.433-1.395L10.5 4.53a.785.785 0 01-.589-.447L8.201.456a.767.767 0 00-1.402 0L5.087 4.083a.785"
+#                 nostar ="M7.5 1.167l1.565 3.317c.242.52.728.885 1.295.974l3.583.544-2.62 2.673a1.782 1.782 0 00-.48 1.532l.609 3.718L8.315 12.2a1.6"
+#                 try:
+#                     discount = tour_item.select_one("[class*=savingsLabel]").text.strip()
+#                 except:
+#                     discount = 'N/A'
+#                 try:
+#                     amount_reviews = tour_item.select_one("[class*=reviewCount]").text.strip()
+#                 except:
+#                     amount_reviews = 'N/A'
+#                 try:
+#                     star_int = 0
+#                     stars_grouped = tour_item.select_one("[class*=stars]").find_all('svg')
+#                     half_star = 'M14'
+#                     for st in stars_grouped:
+#                         path_text = str(st.find('path')['d'])
+#                         if half_star in path_text:
+#                             star_int = star_int + 0.5
+#                         else:
+#                             if '0a.77.77' in str(st):
+#                                 star_int = star_int + 1
+#                     stars = f'star-{str(star_int)}'
+#                 except:
+#                     stars = 'N/A'
+#                 text = tour_item.text.strip()
 
-                data.append([title,product_url, price, stars, amount_reviews, discount, text, date_today, position, category, siteuse, city ])
-        print(f'URL: {city} currency: {splitter}')
-    url_done = time.time()
-    # message = f'Time for {city}-{category}: {round((url_done - url_time)/60, 3)}min | Pages: {max_pages} | AVG {round((url_done - url_time)/max_pages, 2)}s per page Currency: 1-{first_style_curr}, 2-{second_style_curr}, 3-{thirtd_style_curr}'
-    # print(message)
-    # logger_info.info(message)
-    df = pd.DataFrame(data, columns=['Tytul', 'Tytul URL', 'Cena', 'Opinia', 'IloscOpini', 'Przecena', 'Tekst', 'Data zestawienia', 'Pozycja', 'Kategoria', 'SiteUse', 'Miasto'])
-    df['Pozycja'] = df.groupby('Kategoria').cumcount() + 1
-    file_path = fr'{output_viator}/{date_today}-{city}-Viator.csv' 
-    df.to_csv(file_path, header=not os.path.exists(file_path), index=False, mode='a')
-    data_city_df.to_csv(file_path_done, header=not os.path.exists(file_path_done), index=False, mode='a')
-    os.remove(city_path_done)
-#     row.to_csv(file_path_done, header=True, index=True) 
+#                 data.append([title,product_url, price, stars, amount_reviews, discount, text, date_today, position, category, siteuse, city ])
+#         print(f'URL: {city} currency: {splitter}')
+#     url_done = time.time()
+#     # message = f'Time for {city}-{category}: {round((url_done - url_time)/60, 3)}min | Pages: {max_pages} | AVG {round((url_done - url_time)/max_pages, 2)}s per page Currency: 1-{first_style_curr}, 2-{second_style_curr}, 3-{thirtd_style_curr}'
+#     # print(message)
+#     # logger_info.info(message)
+#     df = pd.DataFrame(data, columns=['Tytul', 'Tytul URL', 'Cena', 'Opinia', 'IloscOpini', 'Przecena', 'Tekst', 'Data zestawienia', 'Pozycja', 'Kategoria', 'SiteUse', 'Miasto'])
+#     df['Pozycja'] = df.groupby('Kategoria').cumcount() + 1
+#     file_path = fr'{output_viator}/{date_today}-{city}-Viator.csv' 
+#     df.to_csv(file_path, header=not os.path.exists(file_path), index=False, mode='a')
+#     data_city_df.to_csv(file_path_done, header=not os.path.exists(file_path_done), index=False, mode='a')
+#     os.remove(city_path_done)
+# #     row.to_csv(file_path_done, header=True, index=True) 
+
+
+# %%
 
 
 # %%
@@ -1224,7 +1329,7 @@ def daily_run_viator(df_links=pd.DataFrame(), re_run=False):
     elif re_run == True:
         print(f'Lenght of links: {len(df_links)}')
     else:
-        print("Nothing done yet")
+        logger_info.info("Nothing done yet")
 
     # Define the URL of the website we want to scrape
     start_time = time.time()
@@ -1281,15 +1386,12 @@ while True:
     except Exception as e:
         handle_error_and_rerun(e)
 
-# check_amount_data()
-# re_run_daily()
 try:
     combine_csv_to_xlsx()
 except Exception as e:
     handle_error_and_rerun(e)   
-
     tb = traceback.format_exc()
-    logger_err.error('An error occurred: {} on {}'.format(str(error), tb))
+    logger_err.error('An error occurred: {} on {}'.format(str(e), tb))
 # # Call the function to upload the file to Azure Blob Storage
 try:
     upload_excel_to_azure_storage_account(local_file_path, storage_account_name, storage_account_key, container_name_raw, blob_name)
@@ -1335,11 +1437,125 @@ except Exception as e:
 #             print('_______________________')
 
 # %%
+# """
+# DEBUG error in output from ZEN
+
+# """
+# df_links = pd.read_csv(link_file)
+# df_links = df_links.head(1)
+# for index, row in df_links.iterrows():
+#     print('Row processing: ', index)
+#     page = 1
+#     url_input = row["URL"]
+#     city_input = row['City']
+#     category_input = row['MatchCategory']
+
+#     if category_input == 'Global':
+#         max_pages = 20
+#     else:
+#         max_pages = 2
+
+#     if city_input == 'Capri':
+#         max_pages = 9
+#     elif city_input == 'Taormina':
+#         max_pages = 6
+#     elif city_input == 'Lisbon' and category_input == 'Global':
+#         max_pages = 65
+#     elif city_input == 'Porto' and category_input == 'Global' :
+#         max_pages = 30
+
+
+#     # max_pages = 2
+
+#     city_path_done = fr'{output_viator}/{date_today}-{city_input}-{category_input}.csv'  
+#     city_path_done_archive = fr'{output_viator}/archive/{date_today}-{city_input}-{category_input}.csv'  
+#     if os.path.exists(city_path_done):
+#         city_done_msg = pd.read_csv(city_path_done)
+#         page = int(city_done_msg.drop_duplicates(subset='City', keep='last')['Page'].iloc[0]) + 1
+#     elif os.path.exists(city_path_done_archive):
+#         logger_done.info('City already in Archive folder moving further')
+#         df_links = df_links.drop(index)
+#         page = max_pages + 1
+#         continue
+                    
+
+# #         print(f'City: {city_input} category: {category_input} have page done {page} in file {city_path_done}')
+    
+
+#     while page <= max_pages:
+#         if page == 1:
+#             url = f'{url_input}'
+#         else:
+#             url = f'{url_input}/{page}'
+#         print(url)
+#         page += 1
+        
+# # CHECK THE TXT FILE FOR DATE-CITY IF THERE IS ANYTHING DONE 
+#         print(city_input, category_input, url, 'Processing in ZEN')
+#         params = {
+#             'url': url,
+#             'apikey': API_KEY_ZENROWS,
+#             'js_render': 'true',
+#             'json_response': 'true',
+#             'js_instructions': """[{"click":".selector"},{"wait":500},{"fill":[".input","value"]},{"wait_for":".slow_selector"}]""",
+#             'premium_proxy': 'true',
+#         }
+#         response = requests.get('https://api.zenrows.com/v1/', params=params)
+#         # time.sleep(5)
+#         if response.status_code == 200:
+#                 try:
+#                     data_send_df = pd.DataFrame({
+#                         'UrlRequest': [url],
+#                         'City': city_input,
+#                         'Page': [page],
+#                         'Category': category_input
+#                     }, columns=['UrlRequest', 'City', 'Page', 'Category'])
+#                     display(data_send_df)
+#                     t = process_html_from_response_zenrows(response, city_input, category_input)
+#                     print('Data saved on disk')
+#                     data_send_df.to_csv(city_path_done, header=not os.path.exists(city_path_done), index=False, mode='a')
+#                 except json.JSONDecodeError:
+#                     print("JSON could not be decoded")
+#         else:
+#                 print("HTTP request returned code: ", response.status_code, "reduced page number from: ", page, " to ", page-1)
+#                 page +=1
+#     # shutil.move(city_path_done, city_path_done_archive)
+#     # logger_info.info((f'Archived file to {city_path_done_archive}'))
+
 
 
 # %%
-# Title: "Slow Loading Times Challenges in Efficiently Retrieving HTML Content"
 
+
+# %%
+
+# data = []
+# soup = BeautifulSoup(t.content, 'html.parser')       
+# tours = soup.select("[data-automation*=ttd-product-list-card]")
+# print(response)
+# print("@@@@@@@@@@@@@@\n", response.content)
+# # Filter these elements to find those that exactly match your target attribute value
+# tour_items = [el for el in tours if el.get('data-automation') == r'\"ttd-product-list-card\"']
+# print(f"Found {len(tour_items)} elements with exact 'data-automation=ttd-product-list-card' match.")
+# if len(tour_items) > 0:
+#     for tour_item in tour_items:
+#     #                 page_pos = tour_item['data-action-page-properties']
+#     #                 page_list = page_pos.split('|')[0].split(':')[1]
+#     #                 position = int(page_pos.split('|')[1].split(':')[1]) + (page - 1) * 24
+#         # position = position + 1
+#         title = tour_item.select_one("[data-automation*=ttd-product-list-card-title]").get_text()
+#         price_container = tour_item.select_one("[data-automation*=ttd-product-list-card-price]")
+#         price = price_container.select_one("[class*=currentPrice]").text.strip().split('from')[-1]
+#         part_url = tour_item.select_one("[data-automation*=ttd-product-list-card-link]").get('href').split('"')[1].split('\\')[0]
+#         product_url = f"https://www.viator.com{part_url}"
+#         siteuse = 'Viator'
+
+# for i in tours:
+#     if i.get('data-automation') == r'\"ttd-product-list-card\"':
+#         print(i.select_one("[data-automation*=ttd-product-list-card-title]").get_text())
+
+# %%
+# Title: "Slow Loading Times Challenges in Efficiently Retrieving HTML Content"
 # Description:
 # This issue revolves around the prolonged loading times experienced when using ScraperAPI to access websites. The process begins with sending a request to ScraperAPI, which in turn provides a URL response containing the HTML content of the desired website. However, the main challenge arises in the subsequent step, where the loading of this HTML content takes an excessively long time. This delay significantly hinders the efficiency of the data retrieval process, affecting the overall performance of applications reliant on timely data scraping. The goal is to identify and resolve the factors contributing to these slow loading times, ensuring a more streamlined and rapid data extraction experience.
 
