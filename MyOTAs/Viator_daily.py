@@ -15,6 +15,7 @@ from selenium.webdriver.common.action_chains import ActionChains
 import os
 import shutil
 import logging
+import logging.handlers
 import traceback
 import re
 from threading import Lock, current_thread
@@ -27,8 +28,6 @@ import requests
 import json
 import concurrent.futures
 
-
-# eyJhbGciOiJSUzI1NiIsImtpZCI6IjY3YmFiYWFiYTEwNWFkZDZiM2ZiYjlmZjNmZjVmZTNkY2E0Y2VkYTEiLCJ0eXAiOiJKV1QifQ.eyJuYW1lIjoiV29qdGVrIEJhbG9uIiwicGljdHVyZSI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL0FBY0hUdGZCODM1WVhSalRJeEl4WmxyTnBaRXpWQk9hZmUyMUFmU1dZZXNnUGc9czk2LWMiLCJpc3MiOiJodHRwczovL3NlY3VyZXRva2VuLmdvb2dsZS5jb20vZXhhMi1mYjE3MCIsImF1ZCI6ImV4YTItZmIxNzAiLCJhdXRoX3RpbWUiOjE2ODY2NTg5MDYsInVzZXJfaWQiOiJEcWRXRDhRdloyUTkzcTR4WFhWWlFWUk8wSEMyIiwic3ViIjoiRHFkV0Q4UXZaMlE5M3E0eFhYVlpRVlJPMEhDMiIsImlhdCI6MTY4NjY1OTA2MSwiZXhwIjoxNjg2NjYyNjYxLCJlbWFpbCI6IndvamJhbDNAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsImZpcmViYXNlIjp7ImlkZW50aXRpZXMiOnsiZ29vZ2xlLmNvbSI6WyIxMTUwNTc1NjgzNzI4NjQ1MzA0NTciXSwiZW1haWwiOlsid29qYmFsM0BnbWFpbC5jb20iXX0sInNpZ25faW5fcHJvdmlkZXIiOiJnb29nbGUuY29tIn19.IAOh_U2LXNXGk1jqG3q6m9utI79QVMDtCuUcDBSH5TEKPmMCEdW962qOZN6J8wfMzexHX1cWoqGcXYBmjLcjQKBhhQoAUAdYjxEivrLHe8Hi37bIwXrEX9mvAKD1wE71Sq1sbB3B9xU51lTsH88l7P0pq9LDgbaKkJCljvvzJ186BTbX9Qw0CF4gma1XjJ1W3Nmd0BK2pE9y0b3arF_V8bSME6BeR4Ls1yKLM9da-MCN5y-IkwGVB6j78Qrt-4_emtAhxjkcYlzauOtEM8dZ0NzblgSxY-hdG_sG-Clg0gM6fxXRQSQJYjqHNgwY7sjAP885JUWbtjWjoXKvdJn_iA
 
 # %%
 # File paths
@@ -92,44 +91,82 @@ API_KEY_ZENROWS = '56ed5b7f827aa5c258b3f6d3f57d36999aa949e8' # https://app.zenro
 file_write_lock = Lock()
 
 # %%
-# create logger object
+archive_logs_path = os.path.join(logs_path, 'archive_logs')
+if not os.path.exists(archive_logs_path):
+    os.makedirs(archive_logs_path)
+# Function to get the log file name based on the current month
+def get_log_file_name(base_file_name):
+    current_month = time.strftime("%Y%m")
+    return f"{current_month}_{base_file_name}.log"
+# Create a function to rotate the logs
+def rotate_logs(handler, logger):
+    current_month = time.strftime("%Y%m")
+    if not handler.baseFilename.endswith(current_month + ".log"):
+        logger.removeHandler(handler)
+        handler.close()
+        handler.baseFilename = os.path.join(logs_path, get_log_file_name(handler.baseFilename))
+        logger.addHandler(handler)
+
+
+# %%
+# create logger objects
 logger_err = logging.getLogger('Error_logger')
-logger_err.setLevel(logging.DEBUG)
 logger_info = logging.getLogger('Info_logger')
-logger_info.setLevel(logging.DEBUG)
 logger_done = logging.getLogger('Done_logger')
+
+# set loggers' level
+logger_err.setLevel(logging.DEBUG)
+logger_info.setLevel(logging.DEBUG)
 logger_done.setLevel(logging.DEBUG)
 
 # create console handler and set level to debug
 ch = logging.StreamHandler()
 ch.setLevel(logging.DEBUG)
 
-# create file handler for error logs and set level to debug
-fh_error = logging.FileHandler(fr'{logs_path}/error_logs.log')
-fh_error.setLevel(logging.DEBUG)
-
-# create file handler for info logs and set level to info
-fh_info = logging.FileHandler(fr'{logs_path}/info_logs.log')
-fh_info.setLevel(logging.INFO)
-
-# create file handler for info logs and set level to info
-fh_done = logging.FileHandler(fr'{logs_path}/done_logs.log')
-fh_done.setLevel(logging.INFO)
 # create formatter
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-# add formatter to handlers
+# add formatter to console handler
 ch.setFormatter(formatter)
+
+# Add console handler to loggers
+logger_err.addHandler(ch)
+logger_info.addHandler(ch)
+logger_done.addHandler(ch)
+
+# Create TimedRotatingFileHandlers for each logger
+fh_error = logging.handlers.TimedRotatingFileHandler(
+    filename=os.path.join(logs_path, get_log_file_name('error_logs')), 
+    when='M', 
+    interval=1, 
+    backupCount=24
+)
+fh_info = logging.handlers.TimedRotatingFileHandler(
+    filename=os.path.join(logs_path, get_log_file_name('info_logs')), 
+    when='M', 
+    interval=1, 
+    backupCount=24
+)
+fh_done = logging.handlers.TimedRotatingFileHandler(
+    filename=os.path.join(logs_path, get_log_file_name('done_logs')), 
+    when='M', 
+    interval=1, 
+    backupCount=24
+)
+
+# Set level for file handlers
+fh_error.setLevel(logging.DEBUG)
+fh_info.setLevel(logging.INFO)
+fh_done.setLevel(logging.INFO)
+
+# Add formatter to file handlers
 fh_error.setFormatter(formatter)
 fh_info.setFormatter(formatter)
 fh_done.setFormatter(formatter)
 
-# add handlers to logger
-logger_err.addHandler(ch)
+# Add file handlers to loggers
 logger_err.addHandler(fh_error)
-logger_info.addHandler(ch)
 logger_info.addHandler(fh_info)
-logger_done.addHandler(ch)
 logger_done.addHandler(fh_done)
 
 # %%
@@ -851,7 +888,7 @@ def process_city(row, thread_name = None):
     if os.path.exists(city_path_done):
         city_done_msg = pd.read_csv(city_path_done)
         page = int(city_done_msg.drop_duplicates(subset='City', keep='last')['Page'].iloc[0]) + 1
-        logger_info.info(f'Resuming {city_input} from page {page}')
+        logger_info.info(f'Resuming {city_input}-{category_input} from page {page} of {max_pages}')
     elif os.path.exists(city_path_done_archive):
         logger_done.info('City already in Archive folder moving further')
         return
@@ -1371,6 +1408,31 @@ def check_if_all_csv_processed():
         return 'brake'
     else:
         return f"Files to process: {len(csv_files_not_finished)}"
+
+# %%
+def calculate_max_pages_specualtions(city_input, category_input):
+    if city_input == 'Capri':
+        return 9
+    if city_input == 'Taormina':
+        return 6
+    if city_input == 'Lisbon' and category_input == 'Global':
+        return 65
+    if city_input == 'Porto' and category_input == 'Global':
+        return 30
+    if city_input == 'Venice' and category_input == 'Global':
+        return 55
+    return 25 if category_input == 'Global' else 2
+
+def count_credits_use():
+    df_links = pd.read_csv(link_file)
+    total_pages_per_day = sum(calculate_max_pages_specualtions(row['City'], row['MatchCategory']) for index, row in df_links.iterrows())
+    credit_per_page = 25
+    avg_days_in_month = 30
+    logger_done.info(f'There are {total_pages_per_day} pages to collect daily which is {total_pages_per_day*credit_per_page} credits daily')
+    logger_done.info(f'Requried credits per month for current setup {total_pages_per_day*credit_per_page*avg_days_in_month}')
+
+# %%
+
 
 # %%
 while True:
