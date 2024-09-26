@@ -1,0 +1,6 @@
+{
+    "AZURE_STORAGE_CONNECTION_STRING": "DefaultEndpointsProtocol=https;AccountName=storagemyotas;AccountKey=vyHHUXSN761ELqivtl/U3F61lUY27jGrLIKOyAplmE0krUzwaJuFVomDXsIc51ZkFWMjtxZ8wJiN+AStbsJHjA==;EndpointSuffix=core.windows.net",
+	"CONTAINER_NAME": "future-price-reqeusts",
+	"SAFUTUREPRICE_CONNECTION_STRING": "DefaultEndpointsProtocol=https;AccountName=safutureprice;AccountKey=dABxVIB5DGeNj9bFKP1XbYjEde51vmZznkqrl7XsjnmphqDHDyCv0B1eBDeXw6uofXg0rGPs1gXO+ASt3b76Wg==;EndpointSuffix=core.windows.net",
+	"SAFUTUREPRICE_CONTAINER_NAME": "refinedresource"
+}

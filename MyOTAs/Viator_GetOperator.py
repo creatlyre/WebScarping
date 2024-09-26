@@ -27,6 +27,7 @@ import random
 import requests
 import json
 import concurrent.futures
+import io
 
 # eyJhbGciOiJSUzI1NiIsImtpZCI6IjY3YmFiYWFiYTEwNWFkZDZiM2ZiYjlmZjNmZjVmZTNkY2E0Y2VkYTEiLCJ0eXAiOiJKV1QifQ.eyJuYW1lIjoiV29qdGVrIEJhbG9uIiwicGljdHVyZSI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL0FBY0hUdGZCODM1WVhSalRJeEl4WmxyTnBaRXpWQk9hZmUyMUFmU1dZZXNnUGc9czk2LWMiLCJpc3MiOiJodHRwczovL3NlY3VyZXRva2VuLmdvb2dsZS5jb20vZXhhMi1mYjE3MCIsImF1ZCI6ImV4YTItZmIxNzAiLCJhdXRoX3RpbWUiOjE2ODY2NTg5MDYsInVzZXJfaWQiOiJEcWRXRDhRdloyUTkzcTR4WFhWWlFWUk8wSEMyIiwic3ViIjoiRHFkV0Q4UXZaMlE5M3E0eFhYVlpRVlJPMEhDMiIsImlhdCI6MTY4NjY1OTA2MSwiZXhwIjoxNjg2NjYyNjYxLCJlbWFpbCI6IndvamJhbDNAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsImZpcmViYXNlIjp7ImlkZW50aXRpZXMiOnsiZ29vZ2xlLmNvbSI6WyIxMTUwNTc1NjgzNzI4NjQ1MzA0NTciXSwiZW1haWwiOlsid29qYmFsM0BnbWFpbC5jb20iXX0sInNpZ25faW5fcHJvdmlkZXIiOiJnb29nbGUuY29tIn19.IAOh_U2LXNXGk1jqG3q6m9utI79QVMDtCuUcDBSH5TEKPmMCEdW962qOZN6J8wfMzexHX1cWoqGcXYBmjLcjQKBhhQoAUAdYjxEivrLHe8Hi37bIwXrEX9mvAKD1wE71Sq1sbB3B9xU51lTsH88l7P0pq9LDgbaKkJCljvvzJ186BTbX9Qw0CF4gma1XjJ1W3Nmd0BK2pE9y0b3arF_V8bSME6BeR4Ls1yKLM9da-MCN5y-IkwGVB6j78Qrt-4_emtAhxjkcYlzauOtEM8dZ0NzblgSxY-hdG_sG-Clg0gM6fxXRQSQJYjqHNgwY7sjAP885JUWbtjWjoXKvdJn_iA
 
@@ -408,13 +409,14 @@ logging.basicConfig(level=logging.INFO,
                               logging.StreamHandler()])
 
 class Scraper:
-    def __init__(self, api_key, file_path_csv_operator, file_path_all_links_send_to_scraper):
+    def __init__(self, api_key, file_path_xlsx_operator, file_path_all_links_send_to_scraper):
         self.API_KEY = api_key
-        self.file_path_csv_operator = file_path_csv_operator
+        self.file_path_xlsx_operator = file_path_xlsx_operator
+        
         self.file_path_all_links_send_to_scraper = file_path_all_links_send_to_scraper
         logging.info("Scraper initialized with API key and file paths.")
 
-    def _load_dataframe_csv(self, file_path):
+    def _load_dataframe_xlsx(self, file_path):
         with open(file_path, 'rb') as file:
             binary_content = file.read()
 
@@ -425,31 +427,43 @@ class Scraper:
         data_stream = StringIO(decoded_content)
 
         # Read the stream into a DataFrame
-        df = pd.read_csv(data_stream)
+        df = pd.read_xlsx(data_stream)
         return df
 
     def _load_dataframe_xlsx(self, file_path):
         return pd.read_excel(file_path)
 
-    def _save_dataframe(self, df, file_path, header=True, mode='w'):
-        df.to_csv(file_path, index=False, header=header, mode=mode)
-
+    def _save_dataframe(self, df, file_path, header=True):
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            workbook = writer.book
+            workbook.strings_to_urls = False
+            df.to_excel(writer, index=False, sheet_name='AllLinks')
+        with open(file_path, 'wb') as f:
+            f.write(output.getvalue())
+            
+    def _process_single_url(self, url):
+        response = self._make_zenrows_request(url)
+        self.extract_supplier_name(response, url)
+    
     def send_url_to_process_supplier_name(self):
         """Process URLs using the updated ZenRows-based API interaction method."""
-        dataframe_to_process = self._load_dataframe_csv(self.file_path_csv_operator)
+        dataframe_to_process = self._load_dataframe_xlsx(self.file_path_xlsx_operator)
         dataframe_to_process = dataframe_to_process[dataframe_to_process['Operator'] == 'ToDo']
 
         # Check if there are already processed URLs
         if os.path.exists(self.file_path_all_links_send_to_scraper):
-            processed_data = self._load_dataframe_csv(self.file_path_all_links_send_to_scraper)
+            processed_data = self._load_dataframe_xlsx(self.file_path_all_links_send_to_scraper)
             processed_urls = processed_data['UrlRequest'].unique()
         else:
             processed_urls = []
 
         # Filter out URLs that have already been processed
         dataframe_to_process = dataframe_to_process[~dataframe_to_process['Link'].isin(processed_urls)]
-        processed_count = 1
         total_url_to_do = len(dataframe_to_process)
+        processed_count = 1
+
+
         for _, row in dataframe_to_process.iterrows():
             url = row['Link']
             response = self._make_zenrows_request(url)
@@ -459,6 +473,20 @@ class Scraper:
             logging.info(f"Currently processing {processed_count}. Done {percent_done:.2f}%")
             processed_count += 1
 
+
+        # with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        #     future_to_url = {executor.submit(self._process_single_url, row['Link']): row for _, row in dataframe_to_process.iterrows()}
+        #     processed_count = 1
+        #     for future in concurrent.futures.as_completed(future_to_url):
+        #         url = future_to_url[future]['Link']
+        #         try:
+        #             future.result()
+        #         except Exception as e:
+        #             logging.error(f"Error processing URL {url}: {e}")
+        #         # Log the progress
+        #         percent_done = (processed_count / total_url_to_do) * 100
+        #         logging.info(f"Currently processing {processed_count}. Done {percent_done:.2f}%")
+        #         processed_count += 1
             
 
     def _make_zenrows_request(self, url):
@@ -473,22 +501,22 @@ class Scraper:
         return requests.get('https://api.zenrows.com/v1/', params=params)
 
     def extract_supplier_name(self, response, url):
-        """Extract supplier name from the URLs and update the CSV."""
-        # all_links_df = self._load_dataframe_csv(self.file_path_all_links_send_to_scraper)
-        operator_csv = self._load_dataframe_csv(self.file_path_csv_operator)
+        """Extract supplier name from the URLs and update the xlsx."""
+        # all_links_df = self._load_dataframe_xlsx(self.file_path_all_links_send_to_scraper)
+        operator_xlsx = self._load_dataframe_xlsx(self.file_path_xlsx_operator)
         counter = 1
         # Preparing session for HTTPS requests
         supplier_name = self._get_supplier_name_from_url(response, url)
         logging.info(f"Extracted supplier name: {supplier_name} for URL: {url}")
-        operator_csv.loc[operator_csv['Link'] == url, 'Operator'] = supplier_name
+        operator_xlsx.loc[operator_xlsx['Link'] == url, 'Operator'] = supplier_name
         counter +=1
         print(counter)
         if counter % 50 == 0:
             print(counter, counter % 50)
             logging.info('Saving files...')
-            self._save_dataframe(operator_csv, self.file_path_csv_operator)
+            self._save_dataframe(operator_xlsx, self.file_path_xlsx_operator)
 
-        self._save_dataframe(operator_csv, self.file_path_csv_operator)    
+        self._save_dataframe(operator_xlsx, self.file_path_xlsx_operator)    
 
     def _get_supplier_name_from_url(self, response, url):
         """Extract the supplier name from a given URL."""
@@ -508,20 +536,20 @@ class Scraper:
 # Create an instance of the Scraper class
 def main():
     scraper = Scraper(api_key=API_KEY_ZENROWS, 
-                    file_path_csv_operator=file_path_csv_operator, 
+                    file_path_xlsx_operator=file_path_xlsx_operator, 
                     file_path_all_links_send_to_scraper=file_path_all_links_send_to_scraper)
 
-    # Read the operator CSV and get the count of 'ToDo' links
+    # Read the operator xlsx and get the count of 'ToDo' links
     
-    operator_csv = scraper._load_dataframe_csv(scraper.file_path_csv_operator)
-    print(f"There are {len(operator_csv[operator_csv['Operator'] == 'ToDo'])} links to do")
+    operator_xlsx = scraper._load_dataframe_xlsx(scraper.file_path_xlsx_operator)
+    print(f"There are {len(operator_xlsx[operator_xlsx['Operator'] == 'ToDo'])} links to do")
 
     # Continue processing as long as there are 'ToDo' links
-    while len(operator_csv[operator_csv['Operator'] == 'ToDo']) > 0:
+    while len(operator_xlsx[operator_xlsx['Operator'] == 'ToDo']) > 0:
         print("send_url_to_process_supplier_name_and_extract_data")
         scraper.send_url_to_process_supplier_name()
-        operator_csv = pd.read_csv(scraper.file_path_csv_operator)
-        print(f"There are {len(operator_csv[operator_csv['Operator'] == 'ToDo'])} links to do")
+        operator_xlsx = pd.read_xlsx(scraper.file_path_xlsx_operator)
+        print(f"There are {len(operator_xlsx[operator_xlsx['Operator'] == 'ToDo'])} links to do")
 
 # %%
 # # Create an instance of the Scraper class
@@ -547,6 +575,9 @@ def main():
 
 # %%
 main()
+
+# %%
+
 
 # %%
 

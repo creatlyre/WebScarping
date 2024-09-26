@@ -1,0 +1,33 @@
+[global]
+# disableWatchdogWarning is deprecated
+# sharingMode is deprecated
+showWarningOnDirectExecution = true
+logLevel = "debug"
+
+# client section is deprecated and options are removed
+# [client]
+# caching = true
+# displayEnabled = true
+
+# runner section is deprecated and options are removed
+# [runner]
+# magicEnabled = true
+# installTracer = false
+# fixMatplotlib = true
+
+[server]
+folderWatchBlacklist = [""]
+headless = true
+# liveSave is not a valid option
+runOnSave = false
+port = 80
+enableCORS = false
+
+[browser]
+serverAddress = "0.0.0.0"
+gatherUsageStats = true
+serverPort = 80
+
+# s3 section can be removed if not using AWS S3
+# [s3]
+# keyPrefix = ""

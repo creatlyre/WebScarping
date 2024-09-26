@@ -1,0 +1,8 @@
+
+pandas
+streamlit
+flask
+gunicorn
+numpy
+pyarrow
+azure-storage-blob

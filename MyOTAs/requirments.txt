@@ -1,0 +1,13 @@
+selenium
+beautifulsoup4
+pandas
+webdriver-manager
+requests==2.28.1
+azure-storage-blob
+xlsxwriter
+openpyxl
+pyarrow
+xlsxwriter
+azure-identity
+azure-mgmt-compute
+

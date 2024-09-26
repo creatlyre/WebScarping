@@ -14,6 +14,9 @@ import datetime
 from selenium.webdriver.common.action_chains import ActionChains
 from openpyxl import Workbook, load_workbook
 import re
+import io
+from selenium.webdriver.chrome.webdriver import WebDriver
+
 
 # from undetected_chromedriver import Chrome, ChromeOptions
 # from user_agent import generate_user_agent
@@ -43,6 +46,7 @@ file_path_done =fr'{output_gyg}/{date_today}-DONE-GYG.csv'
 file_path_output = fr"{output_gyg}/GYG - {date_today}.xlsx"
 link_file = fr'G:/.shortcut-targets-by-id/1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2/MyOTAs/Baza Excel/Resource/GYG_links.csv'
 file_path_csv_operator_gyg = fr"G:\.shortcut-targets-by-id\1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2\MyOTAs\Pliki firmowe\Operators_GYG.csv"
+file_path_xlsx_operator_gyg = fr"G:\.shortcut-targets-by-id\1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2\MyOTAs\Pliki firmowe\Operators_GYG.xlsx"
 max_page_file = fr'G:/.shortcut-targets-by-id/1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2/MyOTAs/Baza Excel/Resource/GYG_max_page.csv'
 avg_file = fr'G:/.shortcut-targets-by-id/1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2/MyOTAs/Baza Excel/Resource/avg-gyg.csv'
 re_run_path = fr'{output_gyg}/{date_today}-ReRun-GYG.csv'
@@ -66,15 +70,48 @@ file_path_logs_processed = fr'G:/.shortcut-targets-by-id/1ER8hilqZ2TuX2C34R3SMAt
 
 
 # %%
+
+
+# %%
+def initilize_driver() -> WebDriver:
+    try:
+
+        # Setting up Chrome options
+        options = webdriver.ChromeOptions()
+        # options.add_experimental_option('excludeSwitches', ['enable-logging'])
+        options.add_argument('--blink-settings=imagesEnabled=false')
+
+        # Initialize the Chrome driver
+        driver = webdriver.Chrome(options=options)
+        driver.maximize_window()
+        
+        return driver
+
+    except Exception as e:
+        raise
+    
+def quit_driver(driver: WebDriver) -> None:
+    driver.quit()   
+
+# %%
+def save_dataframe(df, file_path):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        workbook = writer.book
+        workbook.strings_to_urls = False
+        df.to_excel(writer, index=False, sheet_name='AllLinks')
+    with open(file_path, 'wb') as f:
+        f.write(output.getvalue())
+
 def get_operators_name_from_chrome():
-    path_main_file = file_path_csv_operator_gyg
+    path_main_file = file_path_xlsx_operator_gyg
 #     print(f'--------------{path_main_file}')
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()))
+    driver = initilize_driver()
 #     path = path_gyg.replace('\\','/') # replaces backslashes with forward slashes
 #     path = path_gyg[1:len(path_gyg)-1] # to remove quote marks
 #     print(path)
 
-    df = pd.read_csv(path_main_file, encoding='latin-1')    
+    df = pd.read_excel(path_main_file)
     df['Link'] = df['Link'].str.lower()
     df.drop_duplicates(subset=['Link'], inplace=True)              
     df.reset_index()
@@ -107,17 +144,19 @@ def get_operators_name_from_chrome():
             
             print(f'Index: {index} | Total time: {time.time() - timeS} | Avg per record: {(time.time() - timeS) / countDone} | Total done | {countDone} | {((countDone - countFailed)/countDone)*100}%')
 
-            if countDone % 100 == 0:
+            if countDone % 10 == 0:
                 print('INSERTING DF TO EXCEL')
-                df.to_csv(path_main_file, index=False)
-
+                save_dataframe(df, path_main_file)
     
-    df.to_csv(path_main_file, index=False)    
+    df.to_excel(path_main_file, index=False)    
 
-    driver.quit()
+    quit_driver(driver)
 
 # %%
 get_operators_name_from_chrome()
+
+# %%
+
 
 # %%
 

@@ -27,7 +27,7 @@ import random
 import requests
 import json
 import concurrent.futures
-
+import io
 # eyJhbGciOiJSUzI1NiIsImtpZCI6IjY3YmFiYWFiYTEwNWFkZDZiM2ZiYjlmZjNmZjVmZTNkY2E0Y2VkYTEiLCJ0eXAiOiJKV1QifQ.eyJuYW1lIjoiV29qdGVrIEJhbG9uIiwicGljdHVyZSI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL0FBY0hUdGZCODM1WVhSalRJeEl4WmxyTnBaRXpWQk9hZmUyMUFmU1dZZXNnUGc9czk2LWMiLCJpc3MiOiJodHRwczovL3NlY3VyZXRva2VuLmdvb2dsZS5jb20vZXhhMi1mYjE3MCIsImF1ZCI6ImV4YTItZmIxNzAiLCJhdXRoX3RpbWUiOjE2ODY2NTg5MDYsInVzZXJfaWQiOiJEcWRXRDhRdloyUTkzcTR4WFhWWlFWUk8wSEMyIiwic3ViIjoiRHFkV0Q4UXZaMlE5M3E0eFhYVlpRVlJPMEhDMiIsImlhdCI6MTY4NjY1OTA2MSwiZXhwIjoxNjg2NjYyNjYxLCJlbWFpbCI6IndvamJhbDNAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsImZpcmViYXNlIjp7ImlkZW50aXRpZXMiOnsiZ29vZ2xlLmNvbSI6WyIxMTUwNTc1NjgzNzI4NjQ1MzA0NTciXSwiZW1haWwiOlsid29qYmFsM0BnbWFpbC5jb20iXX0sInNpZ25faW5fcHJvdmlkZXIiOiJnb29nbGUuY29tIn19.IAOh_U2LXNXGk1jqG3q6m9utI79QVMDtCuUcDBSH5TEKPmMCEdW962qOZN6J8wfMzexHX1cWoqGcXYBmjLcjQKBhhQoAUAdYjxEivrLHe8Hi37bIwXrEX9mvAKD1wE71Sq1sbB3B9xU51lTsH88l7P0pq9LDgbaKkJCljvvzJ186BTbX9Qw0CF4gma1XjJ1W3Nmd0BK2pE9y0b3arF_V8bSME6BeR4Ls1yKLM9da-MCN5y-IkwGVB6j78Qrt-4_emtAhxjkcYlzauOtEM8dZ0NzblgSxY-hdG_sG-Clg0gM6fxXRQSQJYjqHNgwY7sjAP885JUWbtjWjoXKvdJn_iA
 
 # %%
@@ -43,6 +43,7 @@ file_path_output = fr"{output_viator}/AllLinksViator - {date_today}.xlsx"
 file_path_output_processed = fr"{output_viator}/All Links Viator - {date_today}.xlsx"
 file_path_output_processed_csv = fr"{output_viator}/All Links Viator - {date_today}.csv"
 file_path_csv_operator = fr"G:\.shortcut-targets-by-id\1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2\MyOTAs\Pliki firmowe\Operators_Groups.csv"
+file_path_xlsx_operator = fr"G:\.shortcut-targets-by-id\1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2\MyOTAs\Pliki firmowe\Operators_Groups.xlsx"
 file_path_all_links_send_to_scraper = fr"{output_viator}\SupplierExtract - {date_today}.csv"
 file_path_all_links_send_to_scraper_finished = fr"{output_viator}\SupplierExtractFinished - {date_today}.csv"
 link_file = fr'G:/.shortcut-targets-by-id/1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2/MyOTAs/Baza Excel/Resource/Viator_links.csv'
@@ -181,7 +182,7 @@ import os
 from datetime import datetime
 from glob import glob
 
-def process_excel_and_csv(excel_file_path, file_path_csv, path_to_save):
+def process_excel_and_csv(excel_file_path, file_path, path_to_save):
     # Extract the date from the Excel file name
     date_from_filename = os.path.basename(excel_file_path).split(' - ')[1].split(".")[0]
 
@@ -206,8 +207,11 @@ def process_excel_and_csv(excel_file_path, file_path_csv, path_to_save):
     # Remove duplicates based on the 'Link' column
     df_day = df_day.drop_duplicates(subset=['Link'])
 
+    
+
     # Read the CSV file into a DataFrame
-    df_oper = pd.read_csv(file_path_csv)
+    # df_oper = pd.read_csv(file_path.replace('.csv', '.xlsx'))
+    df_oper = pd.read_excel(file_path)
     df_oper['Link'] = df_oper['Link'].str.lower()
     # Update the 'Reviews' in df_oper from df_day
     df_oper_updated = pd.merge(df_oper, df_day[['Link', 'Reviews']], on='Link', how='left')
@@ -223,25 +227,43 @@ def process_excel_and_csv(excel_file_path, file_path_csv, path_to_save):
     # Drop duplicates while keeping all rows from df_oper
     merged_df = merged_df.drop_duplicates(subset='Link', keep='first')
     merged_df = merged_df[~merged_df['Link'].isnull()]
+    merged_df['Link'] = merged_df['Link'].astype(str)
     # Fill empty 'Operator' column entries with 'ToDo'
     merged_df['Operator'] = merged_df['Operator'].fillna('ToDo')
+    # Clean GYG file
+    if 'GYG' in file_path:
+        merged_df['Reviews'] = merged_df['Reviews'].apply(lambda x: str(x).lower().replace('(', '').replace(')', '').replace('reviews', '') if len(str(x)) > 0 else '0')
+        merged_df['uid'] = merged_df['Link'].apply(lambda x: str(x).split('-')[-1].replace('/', ''))
 
+    else:
+        merged_df['uid'] = merged_df['Link'].apply(lambda x: str(x).split('/')[-1])
+
+    
     # Save the resulting DataFrame to a new file
-    output_file_path = os.path.join(file_path_csv)
-    merged_df.to_csv(output_file_path, index=False, encoding='utf-8-sig')
+    output_file_path = os.path.join(file_path)
+    # merged_df.to_excel(output_file_path, index=False)
+  # Use XlsxWriter as the engine to write the Excel file
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        workbook = writer.book
+        workbook.strings_to_urls = False
+        merged_df.to_excel(writer, index=False, sheet_name='AllLinks')
 
+    with open(output_file_path, 'wb') as f:
+        f.write(output.getvalue())
+        
     print(f"Processed data saved to {output_file_path}")
-
 
 # %%
 # Example usage:
-process_excel_and_csv(output_viator + f"/Viator - {date_today}.xlsx", file_path_csv_operator, fr'G:\.shortcut-targets-by-id\1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2\MyOTAs\Pliki firmowe')
+file_path = file_path_xlsx_operator 
+process_excel_and_csv(output_viator + f"/Viator - {date_today}.xlsx", file_path, fr'G:\.shortcut-targets-by-id\1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2\MyOTAs\Pliki firmowe')
 
 # %%
 output_gyg = r'G:/.shortcut-targets-by-id/1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2/MyOTAs/Baza Excel/Get Your Guide/'
 gyg_file_daily = output_gyg + f'GYG - {date_today}.xlsx'
-file_path_csv_operator_gyg = file_path_csv_operator.replace('Operators_Groups.csv', 'Operators_GYG.csv')
-process_excel_and_csv(gyg_file_daily, file_path_csv_operator_gyg, fr'G:\.shortcut-targets-by-id\1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2\MyOTAs\Pliki firmowe')
+file_path = file_path_xlsx_operator.replace('Operators_Groups.xlsx', 'Operators_GYG.xlsx')
+process_excel_and_csv(gyg_file_daily, file_path, fr'G:\.shortcut-targets-by-id\1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2\MyOTAs\Pliki firmowe')
 
 # %%
 
