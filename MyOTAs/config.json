@@ -1,0 +1,14 @@
+{
+	"Headout": {
+		"settings": {
+			"city": ["Lisbon", "Rome", "Athens", "Florence", "London", "Heraklion", "Sintra", "Porto"],
+			"url": "https://www.headout.com/tours/city/"
+		}
+	},
+	"Musement": {
+		"settings": {
+			"city": ["Lisbon", "Rome", "Athens", "Florence", "London", "Heraklion", "Sintra", "Porto"],
+			"url": "https://www.musement.com/uk/city/"
+		}
+	}
+}
