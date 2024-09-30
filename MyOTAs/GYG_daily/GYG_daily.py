@@ -17,6 +17,7 @@ sys.path.append(os.path.abspath(os.path.join(current_dir, '..')))
 
 # Now you can import the modules
 import common_functions
+import Azure_stopVM
 
 
 
@@ -89,13 +90,13 @@ def main():
             scraper.handle_error_and_rerun(e)
             logger.logger_err.error("Failed to upload the Excel file to Azure Blob Storage (raw container).")
         
-        # # Transform the Excel file and upload the refined version to Azure
-        # try:
-        #     scraper.transform_upload_to_refined()
-        #     logger.logger_info.info("Transformed and uploaded the refined Excel file to Azure Blob Storage (refined container).")
-        # except Exception as e:
-        #     scraper.handle_error_and_rerun(e)
-        #     logger.logger_err.error("Failed to transform and upload the refined Excel file to Azure Blob Storage.")
+        # Transform the Excel file and upload the refined version to Azure
+        try:
+            scraper.transform_upload_to_refined()
+            logger.logger_info.info("Transformed and uploaded the refined Excel file to Azure Blob Storage (refined container).")
+        except Exception as e:
+            scraper.handle_error_and_rerun(e)
+            logger.logger_err.error("Failed to transform and upload the refined Excel file to Azure Blob Storage.")
         
         logger.logger_done.info("All scraping and uploading tasks completed successfully.")
     
@@ -104,26 +105,23 @@ def main():
         logging.basicConfig(level=logging.ERROR)
         logging.error(f"An unexpected error occurred in the main workflow: {e}")
         logging.error(traceback.format_exc())
+    if 'backup' in os.getcwd():
+        script_name = 'Viator_daily.py'
+
+        check_if_viator_running = Azure_stopVM.check_if_script_is_running(script_name)
+        if check_if_viator_running:
+            logger.logger_done.info(f"{script_name} is currently running.")
+        else:
+            logger.logger_done.info(f"{script_name} is not running. Stoping VM")
+            Azure_stopVM.stop_vm()
 
 if __name__ == "__main__":
     main()
+    
 
 
 
 # %%
-
-
-# %%
-if 'backup' in os.getcwd():
-    importlib.reload(Azure_stopVM)
-    script_name = 'Viator_daily.py'
-
-    check_if_viator_running = Azure_stopVM.check_if_script_is_running(script_name)
-    if check_if_viator_running:
-        logger_done.info(f"{script_name} is currently running.")
-    else:
-        logger_done.info(f"{script_name} is not running. Stoping VM")
-        Azure_stopVM.stop_vm()
 
 
 # %%
