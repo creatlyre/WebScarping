@@ -15,6 +15,7 @@ import shutil
 import logging
 import traceback
 import re
+from selenium.webdriver.support.ui import Select
 import csv
 from azure.storage.blob import BlobServiceClient
 import Azure_stopVM
@@ -378,64 +379,39 @@ def daily_run_gyg(df_links=pd.DataFrame(), re_run=False):
                     time.sleep(4)
 
             
-        #     VERIFY IF THE CURRENCY IS CORRECT
-            login_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//a[@title='Profile']")))
-#             Below is previous version when the it was Log in instead Prfile
-#             login_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//a[@title='Log in']")))
-            login_button.click()
-#             currency = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//a[@title='Select Currency']")))
-            currency = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//a[@class='option option-currency']")))
-            currency = currency.text.strip()
+            try:
+                button_currency = WebDriverWait(driver, 10).until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, 'select[id="footer-currency-selector"]'))
+                )
+
+            except Exception as e:
+                print(f"Failed to click the element: {e}")
+
+            # Create a Select object for the dropdown
+
+            select = Select(button_currency)
+            # Get the currently selected option
+            selected_option = select.first_selected_option
+            # Select by visible text for Euro, GBP, or USD
+            
+            currency =  selected_option.text.strip()
             if row['City'] in EUR_City:
                 if 'EUR' in currency:
                     pass
                 else:
-                    login_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//a[@title='Profile']")))
-                    login_button.click()
-#                     currency_switcher_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//a[@title='Select Currency']")))
-                    currency_switcher_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//a[@class='option option-currency']")))
-                    # hover over the currency switcher button to show the menu
-                    actions = ActionChains(driver)
-                    actions.move_to_element(currency_switcher_button).perform()
-                    currency_switcher_button .click()
-                    # wait for the EUR currency option to be clickable
-                    eur_currency_option = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//li[@class='currency-modal-picker__item-parent item__currency-modal item__currency-modal--EUR']")))
-                    # click on the EUR currency option to change the currency
-                    eur_currency_option.click()
+                    select.select_by_visible_text('Euro (€)')
                     time.sleep(2)
             elif row['City'] in USD_City:
                 if 'USD' in currency:
                     pass
                 else:
-                    login_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//a[@title='Profile']")))
-                    login_button.click()
-#                     currency_switcher_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//a[@title='Select Currency']")))
-                    currency_switcher_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//a[@class='option option-currency']")))
-                    # hover over the currency switcher button to show the menu
-                    actions = ActionChains(driver)
-                    actions.move_to_element(currency_switcher_button).perform()
-                    currency_switcher_button .click()
-                    # wait for the EUR currency option to be clickable
-                    eur_currency_option = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//li[@class='currency-modal-picker__item-parent item__currency-modal item__currency-modal--USD']")))
-                    # click on the EUR currency option to change the currency
-                    eur_currency_option.click()
+                    select.select_by_visible_text('U.S. Dollar ($)')
                     time.sleep(2)
             elif row['City'] in GBP_City:
                 if 'GBP' in currency:
                     pass
                 else:
-                    login_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//a[@title='Profile']")))
-                    login_button.click()
-#                     currency_switcher_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//a[@title='Select Currency']")))
-                    currency_switcher_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//a[@class='option option-currency']")))
-    # hover over the currency switcher button to show the menu
-                    actions = ActionChains(driver)
-                    actions.move_to_element(currency_switcher_button).perform()
-                    currency_switcher_button .click()
-                    # wait for the EUR currency option to be clickable
-                    eur_currency_option = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//li[@class='currency-modal-picker__item-parent item__currency-modal item__currency-modal--GBP']")))
-                    # click on the EUR currency option to change the currency
-                    eur_currency_option.click()
+                    select.select_by_visible_text('British Pound (£)')
                     time.sleep(2)
             else:
 #                 pass
@@ -467,7 +443,7 @@ def daily_run_gyg(df_links=pd.DataFrame(), re_run=False):
             date_today = datetime.datetime.now().strftime('%Y-%m-%d')
             for tour_item in tour_items:
                 title = tour_item.find('h3', {'class': 'vertical-activity-card__title'}).text.strip()
-                price = tour_item.find('div', {'class': 'baseline-pricing__value'}).text.strip()
+                price = tour_item.find('div', {'class': 'activity-price'}).text.strip()
 #                 product_category = tour_item.find('span', {'class': 'vertical-activity-card__activity-type c-classifier-badge'}).text.strip()
                 product_url = f"https://www.getyourguide.com/{tour_item.find('a')['href']}"
                 product_url = product_url.split('?ranking_uuid')[0]

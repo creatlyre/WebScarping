@@ -74,15 +74,6 @@ def check_if_script_is_running(script_name):
             pass
     return False
 
-# Name of the script to check
-script_name = "Viator_daily.py"
-is_running = check_if_script_is_running(script_name)
-
-if is_running:
-    print(f"{script_name} is currently running.")
-else:
-    print(f"{script_name} is not running.")
-
 
 # %%
 

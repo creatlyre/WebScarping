@@ -20,6 +20,7 @@ from azure.storage.blob import BlobServiceClient
 import io 
 import importlib
 import json
+from datetime import datetime
 
 
 # %%
@@ -79,7 +80,7 @@ class LoggerManager:
     def __init__(self, file_manager):
         self.logs_path = file_manager.logs_path
         self.ensure_log_folder_exists()  # Ensure log folder exists
-        
+
         # Create logger objects for error, info, and done logs
         self.logger_err = logging.getLogger('Error_logger')
         self.logger_err.setLevel(logging.DEBUG)
@@ -94,13 +95,15 @@ class LoggerManager:
         self.ch = logging.StreamHandler()
         self.ch.setLevel(logging.DEBUG)
 
-        self.fh_error = logging.FileHandler(fr'{self.logs_path}/error_logs.log')
+        # Dynamically create paths for each log type based on current year/month
+        current_log_path = self.get_current_log_path()
+        self.fh_error = logging.FileHandler(os.path.join(current_log_path, 'error_logs.log'))
         self.fh_error.setLevel(logging.DEBUG)
 
-        self.fh_info = logging.FileHandler(fr'{self.logs_path}/info_logs.log')
+        self.fh_info = logging.FileHandler(os.path.join(current_log_path, 'info_logs.log'))
         self.fh_info.setLevel(logging.INFO)
 
-        self.fh_done = logging.FileHandler(fr'{self.logs_path}/done_logs.log')
+        self.fh_done = logging.FileHandler(os.path.join(current_log_path, 'done_logs.log'))
         self.fh_done.setLevel(logging.INFO)
 
         # Create formatter
@@ -122,7 +125,20 @@ class LoggerManager:
         self.logger_done.addHandler(self.ch)
         self.logger_done.addHandler(self.fh_done)
 
+    def get_current_log_path(self):
+        """Returns the path for the current year's and month's logs."""
+        now = datetime.now()
+        year = now.strftime('%Y')
+        month = now.strftime('%m')
+        log_folder = os.path.join(self.logs_path, year, month)
+
+        if not os.path.exists(log_folder):
+            os.makedirs(log_folder)
+
+        return log_folder
+
     def ensure_log_folder_exists(self):
+        """Ensures the main logs folder exists."""
         if not os.path.exists(self.logs_path):
             os.makedirs(self.logs_path)
 
@@ -182,7 +198,8 @@ class ProductScraperHeadout:
                 if 'EUR' in currency.get_attribute('innerHTML'):
                     currency.click()
                     break
-
+                
+    
     def get_product_count(self):
         products_count_selenium = self.driver.find_element(By.CSS_SELECTOR, self.css_products_count)
         if 'Loading' in products_count_selenium.get_attribute('innerHTML'):
@@ -213,7 +230,7 @@ class ProductScraperHeadout:
             if current_scroll_position + self.driver.execute_script("return window.innerHeight") >= new_height:
                 break
 
-    def scrape_products(self):
+    def scrape_products(self, global_category=False):
         products = self.driver.find_elements(By.CSS_SELECTOR, self.css_product_card)
         data = []
         position = 1
@@ -221,13 +238,13 @@ class ProductScraperHeadout:
         product_site = self.file_manager.site
         
         for product in products:
-            product_data = self.extract_product_data(product, position, date_today, product_site)
+            product_data = self.extract_product_data(product, position, date_today, product_site, global_category)
             data.append(product_data)
             position += 1
         
         return pd.DataFrame(data, columns=['Tytul', 'Tytul URL', 'Cena', 'Opinia', 'IloscOpini', 'Przecena', 'Data zestawienia', 'Pozycja', 'Kategoria', 'SiteUse', 'Miasto'])
 
-    def extract_product_data(self, product, position, date_today, product_site):
+    def extract_product_data(self, product, position, date_today, product_site, global_category=False):
         product_title = product.find_element(By.TAG_NAME, 'a').text
         product_url = product.find_element(By.TAG_NAME, 'a').get_attribute('href')
 
@@ -258,6 +275,9 @@ class ProductScraperHeadout:
         except:
             product_category = "N/A"
 
+        if global_category:
+            product_category = "Global"
+        
         return [
             product_title, product_url, product_price, product_ratings, product_review_count,
             product_discount_price, date_today, position, product_category, product_site, self.city
@@ -273,7 +293,9 @@ class ProductScraperHeadout:
     def is_city_already_done(self):
         file_path = self.file_manager.get_file_paths()['file_path_done_city']
         return os.path.exists(file_path)  # Check if the file already exists
-    
+    def is_today_already_done(self):
+        file_path_output = self.file_manager.get_file_paths()['file_path_output']
+        return os.path.exists(file_path_output)  # Check if the file already exists
 
      # New method to combine CSV files into a single Excel file
     def combine_csv_to_xlsx(self):
@@ -386,6 +408,61 @@ class ProductScraperMusment:
                     time.sleep(2)
                     break
 
+    def change_currency_gyg(self):
+        currency_switcher_button = self.wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, self.css_switcher_button))) #"//a[@class='option option-currency']"
+        # hover over the currency switcher button to show the menu
+        actions = ActionChains(self.driver)
+        actions.move_to_element(currency_switcher_button).perform()
+        currency_switcher_button .click()
+        # wait for the EUR currency option to be clickable
+        currency_option = self.wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, self.css_currency_suymbol.replace("SYMBOL", self.currency_symbol)))) #"//li[@class='currency-modal-picker__item-parent item__currency-modal item__currency-modal--EUR']"
+        # click on the EUR currency option to change the currency
+        currency_option.click()
+    def select_currency_gyg(self):
+            EUR_City = [
+            "Amsterdam", "Athens", "Barcelona", "Berlin", "Dublin", "Dubrovnik", "Florence", "Istanbul",
+            "Krakow", "Lisbon", "Madrid", "Milan", "Naples", "Paris", "Porto", "Rome", "Palermo", "Venice",
+            "Taormina", "Capri", "Sorrento", "Mount-Etna", "Mount-Vesuvius", "Herculaneum", "Amalfi-Coast",
+            "Pompeii"
+            ]
+
+            USD_City = [
+                "Las-Vegas", "New-York-City", "Cancun", "Dubai"
+            ]
+
+            GBP_City = [
+                "Edinburgh", "London"
+            ]
+
+            if self.city in EUR_City:
+                self.currency_symbol = "EUR"
+            elif self.city in USD_City:
+                self.currency_symbol = "USD"
+            elif self.city in GBP_City:
+                self.currency_symbol = "GBP"
+            #   VERIFY IF THE CURRENCY IS CORRECT
+            login_button = self.wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, self.css_login_button))) # Create new 
+
+            login_button.click()
+
+            currency = self.wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, self.css_currency))) # swithc with currency
+            currency = currency.text.strip()
+            
+            if self.city in EUR_City:
+                if 'EUR' in currency:
+                     pass
+                self.change_currency_gyg()
+            
+            elif self.city in USD_City:
+                if 'USD' in currency:
+                     pass
+                self.change_currency_gyg()
+
+            elif self.city in GBP_City:
+                if 'GBP' in currency:
+                     pass
+                self.change_currency_gyg()
+
     def get_product_count(self):
         products_count_selenium = self.driver.find_element(By.CSS_SELECTOR, self.css_products_count)
         if 'Loading' in products_count_selenium.get_attribute('innerHTML'):
@@ -426,7 +503,8 @@ class ProductScraperMusment:
         
         
         while current_count_of_products < products_count * 0.8:
-            
+
+            self.logger.logger_info.info(f"Current count of products: {current_count_of_products} Products count: {products_count} 80% --> {products_count*0.8}")
             current_count_of_products = len(self.driver.find_elements(By.CSS_SELECTOR, self.css_product_card))
             try:
                 view_more_button = self.wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, self.css_view_more_button)))
@@ -485,7 +563,7 @@ class ProductScraperMusment:
     
     def scrape_products(self, global_category=False):
         
-        self.sort_products_by_popularity()
+        # self.sort_products_by_popularity()
 
         products = self.driver.find_elements(By.CSS_SELECTOR, self.css_product_card)
         data = []
@@ -666,7 +744,9 @@ class AzureBlobUploader:
                     df = df[df['Data zestawienia'].str.len() > 4]
                     df['Cena'] = df['Cena'].map(lambda x: x.split('from')[-1] if isinstance(x, str) and 'from' in x else x)
                     df['Przecena'] = df['Przecena'].map(lambda x: x.split('per person')[0] if isinstance(x, str) and 'per person' in x.lower() else x)
-                    df['Opinia'] = df["Opinia"].str.replace("NEW", '')
+                    # Apply str.replace only if the value is a string
+                    df['Opinia'] = df['Opinia'].map(lambda x: x.replace("NEW", '') if isinstance(x, str) else x)
+
 
                     df.to_excel(writer, sheet_name=sheet_name, index=False)
     # Upload the transformed Excel file to Azure Blob Storage
