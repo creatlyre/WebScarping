@@ -246,7 +246,7 @@ class GYG_Scraper:
 
             # Initialize timers for performance monitoring
             start_time = time.time()
-            total_pages = 0
+            total_pages = 1
             iter_count = 0
 
             # Iterate over each link to perform scraping
@@ -326,7 +326,7 @@ class GYG_Scraper:
                            f"{round((url_done - url_time)/60, 3)} mins | "
                            f"Pages: {max_pages} | "
                            f"AVG: {round((url_done - url_time)/max_pages, 2)}s per page")
-                self.logger.logger_info.info(message)
+                self.logger.logger_done.info(message)
 
                 # Create DataFrame from extracted data
                 df = pd.DataFrame(data, columns=[
@@ -359,6 +359,7 @@ class GYG_Scraper:
             # Combine CSV files into Excel if not a rerun
             if not re_run:
                 self.combine_csv_to_xlsx()
+                return "Done"
 
         except Exception as e:
             self.handle_error_and_rerun(e)
@@ -480,7 +481,7 @@ class GYG_Scraper:
 
             # Extract price and discount
             price_element = tour_item.find('div', {'class': 'activity-price'})
-            discount_element = price_element.find_all('span', {'class': 'activity-price__text-price'})
+            discount_element = price_element.find_all('span', {'class': 'activity-price__text'})
 
             if len(discount_element) == 2:
                 price = discount_element[0].get_text(strip=True)

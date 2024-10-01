@@ -22,9 +22,6 @@ import Azure_stopVM
 
 
 # %%
-
-
-# %%
 css_selectors = {
     'currency': 'div[data-test*="dropdown-currency"]',
     'currency_list': 'section[class*="row-start-center"]',
@@ -71,16 +68,18 @@ def main():
         # Initialize the scraper with the file manager and logger
         scraper = GYG_Scraper(file_manager, logger)
         
-        try:
-            # Execute the daily scraping run with the loaded links
-            result = scraper.daily_run_gyg(df_links=df_links)
-            if result == 'Done':
-                logger.logger_info.info("Scraping already completed for today. No action needed.")
-            
-        except Exception as e:
-            scraper.handle_error_and_rerun(e)
-            logger.logger_err.error("An error occurred during the scraping process.")
-            return  # Exit after handling the error
+        # Execute the daily scraping run with the loaded links
+        while True:
+            try:
+                result = scraper.daily_run_gyg(df_links=df_links)
+            except Exception as e:
+                scraper.handle_error_and_rerun(e)
+                logger.logger_err.error("An error occurred during the scraping process.")
+        
+            if result == "Done":
+                break
+        
+        
         
         # After scraping all links, proceed to upload the consolidated Excel file to Azure
         try:
@@ -122,58 +121,80 @@ if __name__ == "__main__":
 
 
 # %%
+# Initialize site and file manager
+site = "GYG"
+file_manager = common_functions.FilePathManager(site, "NA")  # 'NA' can be a default city or placeholder
+logger = common_functions.LoggerManager(file_manager)
 
+logger.logger_info.info(f"Starting scraping process for site: {site}")
+
+# Load all links and categories from the link file
+link_file_path = file_manager.get_file_paths()['link_file']
+if not os.path.exists(link_file_path):
+    logger.logger_err.error(f"Link file '{link_file_path}' does not exist. Exiting.")
+    
+
+df_links = pd.read_csv(link_file_path)
+logger.logger_info.info(f"Loaded {len(df_links)} links from '{link_file_path}'.")
+
+# Initialize the scraper with the file manager and logger
+scraper = GYG_Scraper(file_manager, logger)
+
+# %%
+# scraper.driver.get()
+
+# %%
+# exclude_sheets = ['Sheet1', 'Data', 'Re-Run', 'DONE']
+# excel_data = pd.read_excel(file_manager.get_file_paths()['file_path_output'], sheet_name=None)
+# for sheet_name, df in excel_data.items():
+#     if sheet_name in exclude_sheets:
+#         continue
+#     # Read the Excel file into a Pandas DataFrame
+#     # Check 'Data zestawienia' for valid date formats
+#     df['Data zestawienia'] = df['Data zestawienia'].astype(str)
+
+#     # Filter rows where 'Data zestawienia' does not have a valid date
+#     invalid_rows = df[~df['Data zestawienia'].apply(is_valid_date)]
+
+#     # Log sheet name and number of invalid rows if found
+#     if not invalid_rows.empty:
+#         scraper.logger.logger_err.error(f"Sheet {sheet_name} has {len(invalid_rows)} invalid date entries in 'Data zestawienia' column.")
+#         raise ValueError(f"Sheet {sheet_name} has {len(invalid_rows)} invalid date entries in 'Data zestawienia' column.")
+    
+
+#     # Convert 'Data zestawienia' to YYYY-MM-DD format if valid
+#     df['Data zestawienia'] = pd.to_datetime(df['Data zestawienia']).dt.strftime('%Y-%m-%d')
+
+#     # Transform the DataFrame (add your transformation logic here)
+#     df['Data zestawienia'] = df['Data zestawienia'].astype('str')
+#     df['IloscOpini'] = df['IloscOpini'].astype(str)
+#     df['IloscOpini'] = df['IloscOpini'].fillna(0)
+#     df['IloscOpini'] = df['IloscOpini'].str.replace('(', '').str.replace(')','')
+#     df['IloscOpini'] = df['IloscOpini'].apply(lambda x: int(float(x.replace('K', '')) * 1000) if isinstance(x, str) and 'K' in x else x)
+
+#     df['Opinia'] = df['Opinia'].astype(str)
+#     df['Opinia'] = df['Opinia'].fillna('N/A')
+#     df['Opinia'] = df['Opinia'].map(lambda x: x.replace("NEW", '') if isinstance(x, str) else x)
+
+#     df = df[df['Tytul'] != 'Tytul']
+#     df = df[df['Data zestawienia'] != 'Data zestawienia']
+#     df = df[df['Data zestawienia'].str.len() > 4]
+
+#     df['Cena'] = df['Cena'].str.lower()
+#     df['Cena'] = df['Cena'].map(lambda x: x.split('from')[-1] if isinstance(x, str) and 'from' in x else x)
+#     df['Cena'] = df['Cena'].apply(lambda x: str(x).replace('€', '').replace('$', '').replace('£', '').strip() if isinstance(x, str) else x)
+#     df['Cena'] = df['Cena'].map(lambda x: x.split('per person')[0] if isinstance(x, str) and 'per person' in x.lower() else x)
+#     df['Cena'] = df['Cena'].map(lambda x: x.split('per group')[0] if isinstance(x, str) and 'per group' in x.lower() else x)
+
+#     df['Przecena'] = df['Przecena'].apply(lambda x: str(x).replace('€', '').replace('$', '').replace('£', '').strip() if isinstance(x, str) else x)
+#     df['Przecena'] = df['Przecena'].map(lambda x: x.split('per person')[0] if isinstance(x, str) and 'per person' in x.lower() else x)
+#     df['Przecena'] = df['Przecena'].map(lambda x: x.split('per group')[0] if isinstance(x, str) and 'per group' in x.lower() else x)
+
+
+#     # Apply str.replace only if the value is a string
+#     df
 
 # %%
 
-# ##################DEBUG CURRENCY SWITCHER
-
-
-
-
-# driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()))
-# driver.maximize_window()
-# # Define the URL of the website we want to scrape
-# start_time = time.time()
-# total_pages = 0
-# #     CHECK IF FILE PATH EXISIT IF SO CHECK THE DATA INSIDE
-# #         print(index, row)
-# page = 1
-# max_pages = 9999
-# data = []
-# position = 0
-# url_time = time.time()
-
-# url = f'https://www.getyourguide.com/s?q=Amsterdam&p=1'
-
-# driver.get(url)
-# time.sleep(1)
-# #     VERIFY IF THE CURRENCY IS CORRECT
-# login_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//a[@title='Profile']")))
-# login_button.click()
-# # currency = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//a[@title='Select Currency']")))
-# currency = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//a[@class='option option-currency']")))
-# currency
-# html = driver.page_source
-# soup = BeautifulSoup(html, 'html.parser')
-
-# %%
-# currency_switcher_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//a[@class='option option-currency']")))
-# # hover over the currency switcher button to show the menu
-# actions = ActionChains(driver)
-# actions.move_to_element(currency_switcher_button).perform()
-# currency_switcher_button .click()
-# # wait for the EUR currency option to be clickable
-# eur_currency_option = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//li[@class='currency-modal-picker__item-parent item__currency-modal item__currency-modal--EUR']")))
-# # click on the EUR currency option to change the currency
-# eur_currency_option.click()
-
-# html = driver.page_source
-# soup = BeautifulSoup(html, 'html.parser')
-
-# tour_items = soup.select("[data-test-id=vertical-activity-card]")
-# len(tour_items)
-# title = tour_items[0].find('p', {'class': 'vertical-activity-card__title'}).text.strip()
-# price = tour_items[0].find('div', {'class': 'baseline-pricing__value'}).text.strip()
 
 
