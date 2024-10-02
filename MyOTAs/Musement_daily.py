@@ -42,7 +42,7 @@ cities = config.get('settings').get('city')
 for city in cities:
     url = config.get('settings').get('url').replace("city", city)
     file_manager = common_functions.FilePathManager(site, city)
-    scraper = common_functions.ProductScraperMusment(url, city, css_selectors, file_manager, logger)
+    scraper = common_functions.ScraperMusement(url, city, css_selectors, file_manager, logger)
     
     
     if scraper.is_city_already_done():
@@ -66,4 +66,5 @@ scraper.combine_csv_to_xlsx()
 blob_uploader = common_functions.AzureBlobUploader(file_manager, logger)
 blob_uploader.upload_excel_to_azure_storage_account()
 blob_uploader.transform_upload_to_refined()
+
 
