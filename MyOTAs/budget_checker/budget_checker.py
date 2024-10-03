@@ -6,7 +6,7 @@ import datetime
 import uuid
 import json
 from io import StringIO
-
+import logging
 
 config = json.load(open("config.json"))
 # Azure Storage credentials (replace these with your actual credentials)
@@ -15,58 +15,163 @@ CONTAINER_NAME = config['CONTAINER_NAME']
 SAFUTUREPRICE_CONNECTION_STRING = config['SAFUTUREPRICE_CONNECTION_STRING']
 SAFUTUREPRICE_CONTAINER_NAME = config['SAFUTUREPRICE_CONTAINER_NAME']
 BLOB_NAME = 'LinksFuturePrice_GYG.csv'
+# Load pricing tiers from config
+pricing_tiers = config.get('PRICING_TIERS')
+# Configure logging
+
+logging.basicConfig(
+    level=logging.INFO,  # Change to DEBUG for more detailed logs
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler()
+    ]
+)
+st.set_page_config(
+    page_title="Future Price - MyOTAs", 
+    page_icon="data/logo_sign-myotas.png",  # Ensure this path is correct and the image is accessible
+    layout='wide'
+)
+
 
 def main():\
     # Custom CSS to match the color scheme of your webpage and improve button alignment
     st.markdown("""
     <style>
-    .main {
-        background-color: #083D77;  /* Dark Blue background */
+    /* Set the background color of the main content area */
+    [data-testid="stAppViewContainer"] {
+        background-color: #083D77;
+        padding: 20px;
     }
-    .stTextInput label, .stNumberInput label, .stSelectbox label, .stMultiselect label {
-        color: #EDEDEB;  /* Light text color */
-        font-size: 1.2rem;  /* Increase font size */
+
+    /* Set the text color globally */
+    html, body, [class*="css"] {
+        color: #FFFFFF;
+        font-size: 1.1rem;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
-    .stTextInput div, .stNumberInput div, .stSelectbox div, .stMultiselect div {
-        font-size: 1.1rem;  /* Increase input font size */
+
+    /* Style headings */
+    h1, h2, h3, h4, h5, h6 {
+        color: #FFFFFF;
+        font-family: 'Segoe UI', sans-serif;
+        font-weight: 600;
+        margin-bottom: 15px;
     }
-    .stButton button {
-        background-color: #FF6F61;  /* Button color */
-        color: #FFFFFF;  /* Button text color */
+
+    /* Style buttons */
+    button {
+        background-color: #FF6F61;
+        color: #FFFFFF;
         border-radius: 5px;
         width: 100%;
-        padding: 10px 20px;  /* Increase padding for bigger button */
-        font-size: 1.1rem;  /* Increase font size */
+        padding: 12px 20px;
+        font-size: 1.1rem;
+        font-weight: 500;
+        transition: background-color 0.3s ease;
     }
-    .stButton button:hover {
-        background-color: #FF5733;  /* Button hover color */
+
+    button:hover {
+        background-color: #FF5733;
         color: #FFFFFF;
     }
-    .stTable {
-        color: #EDEDEB;  /* Table text color */
-        background-color: #2C3E50;  /* Table background color */
+
+    /* Specific button styles for your app */
+    button:disabled {
+        background-color: #FF6F61;
+        opacity: 0.6;
     }
-    h1, h2, h3, h4, h5, h6 {
-        color: #EDEDEB;  /* Header text color */
-        font-size: 2rem;  /* Increase heading size */
+
+    /* Sidebar button adjustments */
+    .stButton > button {
+        background-color: #FF6F61;
+        border: none;
     }
-    .stSelectbox, .stMultiselect, .stNumberInput {
-        width: 100%;  /* Ensure dropdowns and inputs are full-width */
-        padding: 10px;  /* Increase padding for larger inputs */
-        font-size: 1.1rem;  /* Increase input font size */
+
+    .stButton > button:hover {
+        background-color: #FF5733;
     }
-    .stTextInput input, .stNumberInput input, .stSelectbox select, .stMultiselect select {
-        font-size: 1.1rem;  /* Ensure input values are larger */
+
+    /* Sidebar styling */
+    [data-testid="stSidebar"] {
+        background-color: #2C3E50;
+        color: #FFFFFF;
+        padding: 20px;
     }
-    .remove-btn {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: 100%;
+
+    /* Styling for the labels and inputs */
+    label {
+        color: #FFFFFF;
+        font-size: 1.2rem;
+        margin-bottom: 10px;
     }
+
+    input, select, textarea {
+        font-size: 1.1rem;
+        color: #FFFFFF;
+        background-color: #2C3E50;
+        border: 1px solid #3E4C59;
+        padding: 10px;
+        border-radius: 5px;
+    }
+
+    /* Styling for table */
+    table {
+        width: 100%;
+        color: #FFFFFF;
+        background-color: #2C3E50;
+        border-collapse: collapse;
+        margin: 20px 0;
+    }
+
+    th, td {
+        padding: 12px;
+        text-align: center;
+        border-bottom: 1px solid #3E4C59;
+    }
+
+    th {
+        background-color: #1C2833;
+        font-weight: 600;
+    }
+
+    td {
+        background-color: #273B4F;
+    }
+
+    /* Custom padding for better layout */
     .css-1y0tads {
-        padding-top: 20px; /* Adjust top padding */
-        padding-bottom: 20px; /* Adjust bottom padding */
+        padding-top: 20px;
+        padding-bottom: 20px;
+    }
+
+    /* Expander styling */
+    .st-expander {
+        background-color: #2C3E50;
+        border: none;
+    }
+
+    .st-expander summary {
+        background-color: #FF6F61;
+        border-radius: 5px;
+        color: #FFFFFF;
+        padding: 8px;
+        font-size: 1.1rem;
+    }
+
+    /* Sidebar section padding */
+    .stSidebarSection {
+        padding: 20px;
+        margin-bottom: 15px;
+    }
+
+    /* Sidebar total cost styling */
+    .stSidebarSection h3 {
+        margin-bottom: 10px;
+    }
+
+    .stSidebarSection p {
+        font-size: 1.1rem;
+        font-weight: 500;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -86,13 +191,63 @@ def main():\
         'Monthly': 1,
         'Custom': None
     }
-    # Function to calculate the cost for given parameters
-    def calculate_cost(days_future, lang_count, adults_count, refresh_frequency_in_month, time_per_request, machine_price_per_sec):
-        request = days_future * lang_count * adults_count * refresh_frequency_in_month
-        time_single_run = request * time_per_request
-        cost = time_single_run * machine_price_per_sec
-        return cost
+    def calculate_cost(additional_days, start_day, lang_count, adults_count, refresh_frequency_in_month, time_per_request, machine_price_per_sec):
+        """
+        Calculate the cost based on tiered pricing factors.
 
+        Parameters:
+        - additional_days (int): Number of additional days to calculate cost for.
+        - start_day (int): The starting day from which to apply the pricing tiers.
+        - lang_count (int): Number of languages.
+        - adults_count (int): Number of adults.
+        - refresh_frequency_in_month (int): Refresh frequency per month.
+        - time_per_request (float): Time per request in seconds.
+        - machine_price_per_sec (float): Machine price per second.
+
+        Returns:
+        - float: Total cost.
+        """
+        total_cost = 0
+        remaining_days = additional_days
+        current_day = start_day
+
+        logging.info(f"Calculating cost for {additional_days} additional days starting from day {start_day}.")
+
+        for tier in pricing_tiers:
+            if remaining_days <= 0:
+                break
+
+            tier_min = tier["min_days"]
+            tier_max = tier["max_days"]
+            factor = tier["factor"]
+
+            if tier_min <= current_day <= tier_max:
+                # Calculate how many days fall into this tier
+                days_in_tier = min(remaining_days, tier_max - current_day + 1)
+                
+                logging.info(f"Applying Tier {tier_min}-{tier_max} Days: {days_in_tier} days * factor {factor}.")
+
+                # Calculate the number of requests for these days
+                requests = days_in_tier * lang_count * adults_count * refresh_frequency_in_month
+
+                # Calculate the total time required for these requests
+                time_single_run = requests * time_per_request
+
+                # Calculate the cost with the applied factor
+                cost = time_single_run * machine_price_per_sec * factor
+
+                logging.info(f"Cost for {days_in_tier} days: {cost:.4f} EUR.")
+
+                # Add to the total cost
+                total_cost += cost
+
+                # Update remaining days and current day
+                remaining_days -= days_in_tier
+                current_day += days_in_tier
+
+        logging.info(f"Total cost for {additional_days} additional days starting from day {start_day}: {total_cost:.4f} EUR.")
+
+        return total_cost
     # Initialize session state to keep track of activities and positions
     if 'activities' not in st.session_state:
         st.session_state.activities = {
@@ -137,6 +292,9 @@ def main():\
         total_days_covered = 0
         table_data = []
         positions_to_remove = []
+        
+        # Sort the positions by days_future to ensure proper cumulative calculation
+        data['positions'].sort(key=lambda x: x['days_future'])
 
         for i, position in enumerate(data['positions']):
             with st.expander(f'Position {i + 1}', expanded=True):
@@ -147,7 +305,7 @@ def main():\
                 with cols[1]:
                     # Multi-select dropdown for Language Count
                     languages_options = ['English', 'Spanish', 'Portuguese', 'French', 'Polish', 'German', 'Italian', 'Dutch', 'Greek', 'Czech']
-                    languages_selected = st.multiselect('Select Languages', languages_options, key=f'{activity_key}_lang_count_{i}', help="Select the languages.")
+                    languages_selected = st.multiselect('Select Languages', languages_options, default=['English'], key=f'{activity_key}_lang_count_{i}', help="Select the languages.")
 
                     # Calculate the number of languages based on the selected options
                     lang_count = len(languages_selected)
@@ -157,7 +315,7 @@ def main():\
                 with cols[2]:
                     # Replace the number input for 'Adults Count' with a multi-select dropdown
                     adults_options = ['1 Adult', '2 Adults', '3 Adults', '4 Adults', '5 Adults', '6 Adults', '7 Adults', '8 Adults', '9 Adults', '10 Adults']
-                    adults_selection = st.multiselect('Select Adults', adults_options, key=f'{activity_key}_adults_count_{i}', help="Select the number of adults for which you would like to collect data.")
+                    adults_selection = st.multiselect('Select Adults', adults_options, default=['2 Adults'], key=f'{activity_key}_adults_count_{i}', help="Select the number of adults for which you would like to collect data.")
                     # Calculate the total number of adults based on the selection
                     adults_count = len(adults_selection)
                     # Create a string of the selected values
@@ -174,14 +332,35 @@ def main():\
                     remove_button = st.button('X', key=f'{activity_key}_remove_{i}', help='Remove this position')
                     if remove_button:
                         positions_to_remove.append(i)
+                        logging.info(f"Removed position {i+1} from {data['name']}")
 
                 # Calculate additional days to be considered
                 additional_days = max(0, days_future - total_days_covered)
+                start_day = total_days_covered + 1 if additional_days > 0 else 0
                 total_days_covered = max(total_days_covered, days_future)
+                logging.info(f"Additional days: {additional_days}")
+                logging.info(f"Start day: {start_day}")
+                logging.info(f"Total days covered: {total_days_covered}")
+                if additional_days > 0 and start_day > 0:
+                    cost = calculate_cost(
+                    additional_days=additional_days,
+                    start_day=start_day,
+                    lang_count=lang_count,
+                    adults_count=adults_count,
+                    refresh_frequency_in_month=refresh_frequency_in_month,
+                    time_per_request=time_per_request,
+                    machine_price_per_sec=machine_price_per_sec
+                    )
+                else:
+                    cost = 0
+                    logging.info(f"No additional days to calculate for this position.")
 
-                cost = calculate_cost(additional_days, lang_count, adults_count, refresh_frequency_in_month, time_per_request, machine_price_per_sec)
                 st.session_state.activities[activity_key]['positions'][i]['cost'] = cost
                 total_cost += cost
+
+                # cost = calculate_cost(additional_days, lang_count, adults_count, refresh_frequency_in_month, time_per_request, machine_price_per_sec)
+                # st.session_state.activities[activity_key]['positions'][i]['cost'] = cost
+                # total_cost += cost
 
                 table_data.append({
                     'Activity Name': data['name'],
@@ -192,7 +371,7 @@ def main():\
                     'Adults Selected': adults_selected,  
                     'Refresh Frequency per Month': refresh_frequency,
                     'refresh_frequency_num': refresh_frequency_in_month,
-                    'Cost (EUR)': cost
+                    'Cost (EUR) per month': round(cost, 4)
                 })
 
         # Remove positions marked for removal
@@ -225,6 +404,7 @@ def main():\
         # Download the blob to a pandas DataFrame
         csv_data = blob_client.download_blob().readall().decode('utf-8')
         df = pd.read_csv(StringIO(csv_data))
+        logging.info(len(df))
         
         return df
 # Function to update session state from configuration DataFrame

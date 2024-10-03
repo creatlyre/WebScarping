@@ -13,6 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN mkdir -p ~/.streamlit
 COPY config.toml ~/.streamlit/config.toml
 COPY credentials.toml ~/.streamlit/credentials.toml
+COPY . /app
 
 # Expose the default port for Streamlit
 EXPOSE 80

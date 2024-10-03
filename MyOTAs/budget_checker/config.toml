@@ -31,3 +31,11 @@ serverPort = 80
 # s3 section can be removed if not using AWS S3
 # [s3]
 # keyPrefix = ""
+
+[theme]
+base="dark"  # Use "dark" base theme to match dark backgrounds
+primaryColor="#FF6F61"  # Matches your button color
+backgroundColor="#083D77"  # Matches your main background color
+secondaryBackgroundColor="#2C3E50"  # For sidebar and other secondary elements
+textColor="#EDEDEB"  # Light text color for better readability
+font="sans serif"  # Choose your preferred font

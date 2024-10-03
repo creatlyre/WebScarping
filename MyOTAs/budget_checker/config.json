@@ -2,5 +2,37 @@
     "AZURE_STORAGE_CONNECTION_STRING": "DefaultEndpointsProtocol=https;AccountName=storagemyotas;AccountKey=vyHHUXSN761ELqivtl/U3F61lUY27jGrLIKOyAplmE0krUzwaJuFVomDXsIc51ZkFWMjtxZ8wJiN+AStbsJHjA==;EndpointSuffix=core.windows.net",
 	"CONTAINER_NAME": "future-price-reqeusts",
 	"SAFUTUREPRICE_CONNECTION_STRING": "DefaultEndpointsProtocol=https;AccountName=safutureprice;AccountKey=dABxVIB5DGeNj9bFKP1XbYjEde51vmZznkqrl7XsjnmphqDHDyCv0B1eBDeXw6uofXg0rGPs1gXO+ASt3b76Wg==;EndpointSuffix=core.windows.net",
-	"SAFUTUREPRICE_CONTAINER_NAME": "refinedresource"
+	"SAFUTUREPRICE_CONTAINER_NAME": "refinedresource",
+	"PRICING_TIERS": [
+        {
+            "min_days": 1,
+            "max_days": 5,
+            "factor": 2.5
+        },
+        {
+            "min_days": 6,
+            "max_days": 14,
+            "factor": 1.5
+        },
+        {
+            "min_days": 15,
+            "max_days": 30,
+            "factor": 1
+        },
+        {
+            "min_days": 31,
+            "max_days": 60,
+            "factor": 0.75
+        },
+        {
+            "min_days": 61,
+            "max_days": 180,
+            "factor": 0.75
+        },
+        {
+            "min_days": 181,
+            "max_days": 365,
+            "factor": 1
+        }
+    ]
 }
