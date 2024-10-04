@@ -1,24 +1,22 @@
 # %%
-# refactored_file.py
-
-import json
-# from commmon_functions_gyg import GYG_Scraper
 import logging
 import traceback
-import sys
-import os
 import pandas as pd
+import os
+import sys
 
-# # Get the current working directory instead of using __file__
-# current_dir = os.getcwd()
+# Set the current directory to the script location
+current_dir = os.path.dirname(os.path.abspath(__file__))
 
-# # Add the parent directory to the system path
-# sys.path.append(os.path.abspath(os.path.join(current_dir, '..')))
+# Add the root directory (project directory) to sys.path
+project_root = os.path.abspath(os.path.join(current_dir, '..'))
+sys.path.append(project_root)
 
-# Now you can import the modules
-import common_functions
-import Azure_stopVM
-
+from scrapers.scraper_gyg import ScraperGYG
+from file_management.file_path_manager import FilePathManager
+from logger.logger_manager import LoggerManager
+from uploaders.azure_blob_uploader import AzureBlobUploader
+from backup_vm.stop_vm import StopVM
 
 
 # %%
@@ -51,8 +49,8 @@ def main():
     try:
         # Initialize site and file manager
         site = "GYG"
-        file_manager = common_functions.FilePathManager(site, "NA")  # 'NA' can be a default city or placeholder
-        logger = common_functions.LoggerManager(file_manager)
+        file_manager = FilePathManager(site, "NA", True, "2000-10-10")  # 'NA' can be a default city or placeholder
+        logger = LoggerManager(file_manager)
         
         logger.logger_info.info(f"Starting scraping process for site: {site}")
 
@@ -66,7 +64,7 @@ def main():
         logger.logger_info.info(f"Loaded {len(df_links)} links from '{link_file_path}'.")
 
         # Initialize the scraper with the file manager and logger
-        scraper = common_functions.ScraperGYG("N/A", "N/A", css_selectors, file_manager, logger)
+        scraper = ScraperGYG("N/A", "N/A", css_selectors, file_manager, logger)
         
         # Execute the daily scraping run with the loaded links
         while True:
@@ -80,7 +78,7 @@ def main():
                 break
         
         
-        blob_uploader = common_functions.AzureBlobUploader(file_manager, logger)
+        blob_uploader = AzureBlobUploader(file_manager, logger)
         # After scraping all links, proceed to upload the consolidated Excel file to Azure
         try:
             blob_uploader.upload_excel_to_azure_storage_account()
@@ -110,74 +108,13 @@ def main():
     if 'backup' in os.getcwd():
         script_name = 'Viator_daily.py'
 
-        check_if_viator_running = Azure_stopVM.check_if_script_is_running(script_name)
+        check_if_viator_running = StopVM.check_if_script_is_running(script_name)
         if check_if_viator_running:
             logger.logger_done.info(f"{script_name} is currently running.")
         else:
             logger.logger_done.info(f"{script_name} is not running. Stoping VM")
-            Azure_stopVM.stop_vm()
+            StopVM.stop_vm()
 
 if __name__ == "__main__":
     main()
     
-
-
-
-# %%
-# scraper.driver.get()
-
-# %%
-# exclude_sheets = ['Sheet1', 'Data', 'Re-Run', 'DONE']
-# excel_data = pd.read_excel(file_manager.get_file_paths()['file_path_output'], sheet_name=None)
-# for sheet_name, df in excel_data.items():
-#     if sheet_name in exclude_sheets:
-#         continue
-#     # Read the Excel file into a Pandas DataFrame
-#     # Check 'Data zestawienia' for valid date formats
-#     df['Data zestawienia'] = df['Data zestawienia'].astype(str)
-
-#     # Filter rows where 'Data zestawienia' does not have a valid date
-#     invalid_rows = df[~df['Data zestawienia'].apply(is_valid_date)]
-
-#     # Log sheet name and number of invalid rows if found
-#     if not invalid_rows.empty:
-#         scraper.logger.logger_err.error(f"Sheet {sheet_name} has {len(invalid_rows)} invalid date entries in 'Data zestawienia' column.")
-#         raise ValueError(f"Sheet {sheet_name} has {len(invalid_rows)} invalid date entries in 'Data zestawienia' column.")
-    
-
-#     # Convert 'Data zestawienia' to YYYY-MM-DD format if valid
-#     df['Data zestawienia'] = pd.to_datetime(df['Data zestawienia']).dt.strftime('%Y-%m-%d')
-
-#     # Transform the DataFrame (add your transformation logic here)
-#     df['Data zestawienia'] = df['Data zestawienia'].astype('str')
-#     df['IloscOpini'] = df['IloscOpini'].astype(str)
-#     df['IloscOpini'] = df['IloscOpini'].fillna(0)
-#     df['IloscOpini'] = df['IloscOpini'].str.replace('(', '').str.replace(')','')
-#     df['IloscOpini'] = df['IloscOpini'].apply(lambda x: int(float(x.replace('K', '')) * 1000) if isinstance(x, str) and 'K' in x else x)
-
-#     df['Opinia'] = df['Opinia'].astype(str)
-#     df['Opinia'] = df['Opinia'].fillna('N/A')
-#     df['Opinia'] = df['Opinia'].map(lambda x: x.replace("NEW", '') if isinstance(x, str) else x)
-
-#     df = df[df['Tytul'] != 'Tytul']
-#     df = df[df['Data zestawienia'] != 'Data zestawienia']
-#     df = df[df['Data zestawienia'].str.len() > 4]
-
-#     df['Cena'] = df['Cena'].str.lower()
-#     df['Cena'] = df['Cena'].map(lambda x: x.split('from')[-1] if isinstance(x, str) and 'from' in x else x)
-#     df['Cena'] = df['Cena'].apply(lambda x: str(x).replace('€', '').replace('$', '').replace('£', '').strip() if isinstance(x, str) else x)
-#     df['Cena'] = df['Cena'].map(lambda x: x.split('per person')[0] if isinstance(x, str) and 'per person' in x.lower() else x)
-#     df['Cena'] = df['Cena'].map(lambda x: x.split('per group')[0] if isinstance(x, str) and 'per group' in x.lower() else x)
-
-#     df['Przecena'] = df['Przecena'].apply(lambda x: str(x).replace('€', '').replace('$', '').replace('£', '').strip() if isinstance(x, str) else x)
-#     df['Przecena'] = df['Przecena'].map(lambda x: x.split('per person')[0] if isinstance(x, str) and 'per person' in x.lower() else x)
-#     df['Przecena'] = df['Przecena'].map(lambda x: x.split('per group')[0] if isinstance(x, str) and 'per group' in x.lower() else x)
-
-
-#     # Apply str.replace only if the value is a string
-#     df
-
-# %%
-
-
-

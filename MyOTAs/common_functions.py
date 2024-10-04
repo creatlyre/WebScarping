@@ -16,6 +16,7 @@ import logging
 import traceback
 import re
 from azure.storage.blob import BlobServiceClient
+import io
 # from azure.communication.email import EmailClient
 
 
@@ -73,21 +74,36 @@ class FilePathManager:
             'file_path_xlsx_operator': self.file_path_xlsx_operator,
         }
 
+class FilePathManagerFuturePrice(FilePathManager):
+        def __init__(self, site, city, adults, language, manual_overdrive_date=False, manual_date='2024-09-30'):
+            super().__init__(site, city, manual_overdrive_date, manual_date)
+            self.adults = adults
+            self.language = language
+            self.output = fr'G:/.shortcut-targets-by-id/1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2/MyOTAs/Baza Excel/{self.site}/future_price'
+
+            self.extraction_date = datetime.datetime.now().strftime('%Y-%m-%d %H:00:00')
+            self.extraction_date_save_format = f"{self.extraction_date.replace(' ', '_').replace(':','-')}_{self.language}_{self.adults}"
+            # Set the path of the local file
+            # Azure Storage containers and blob name
+            self.container_name_raw = f"raw/future_price/{self.site}"
+            self.container_name_refined = f"refined/future_price/{self.site}"
+            self.output_file_path = f"{self.output}/{self.extraction_date_save_format}_future_price.xlsx" # AKA output_file_path
+            self.blob_name = fr'{self.extraction_date_save_format}_future_price.xlsx'
 # %%
 # LoggerManager class to handle logging configuration and operations
 class LoggerManager:
-    def __init__(self, file_manager):
+    def __init__(self, file_manager, application = "daily"):
         self.logs_path = file_manager.logs_path
         self.ensure_log_folder_exists()  # Ensure log folder exists
 
         # Create logger objects for error, info, and done logs
-        self.logger_err = logging.getLogger('Error_logger')
+        self.logger_err = logging.getLogger(f'Error_logger')
         self.logger_err.setLevel(logging.DEBUG)
 
-        self.logger_info = logging.getLogger('Info_logger')
+        self.logger_info = logging.getLogger(f'Info_logger')
         self.logger_info.setLevel(logging.DEBUG)
 
-        self.logger_done = logging.getLogger('Done_logger')
+        self.logger_done = logging.getLogger(f'Done_logger')
         self.logger_done.setLevel(logging.DEBUG)
 
         # Create handlers
@@ -96,13 +112,13 @@ class LoggerManager:
 
         # Dynamically create paths for each log type based on current year/month
         current_log_path = self.get_current_log_path()
-        self.fh_error = logging.FileHandler(os.path.join(current_log_path, 'error_logs.log'))
+        self.fh_error = logging.FileHandler(os.path.join(current_log_path, f'{application}_error_logs.log'))
         self.fh_error.setLevel(logging.DEBUG)
 
-        self.fh_info = logging.FileHandler(os.path.join(current_log_path, 'info_logs.log'))
+        self.fh_info = logging.FileHandler(os.path.join(current_log_path, f'{application}_info_logs.log'))
         self.fh_info.setLevel(logging.INFO)
 
-        self.fh_done = logging.FileHandler(os.path.join(current_log_path, 'done_logs.log'))
+        self.fh_done = logging.FileHandler(os.path.join(current_log_path, f'{application}_done_logs.log'))
         self.fh_done.setLevel(logging.INFO)
 
         # Create formatter
@@ -141,7 +157,18 @@ class LoggerManager:
         if not os.path.exists(self.logs_path):
             os.makedirs(self.logs_path)
 # %%           
+class LoggerManagerFuturePrice(LoggerManager):
+    def __init__(self, file_manager, application="future_price"):
+        super().__init__(file_manager, application)
+        
+        current_log_path = self.get_current_log_path()
+        self.logger_statistics = logging.getLogger('Statistics_logger')
+        self.logger_statistics.setLevel(logging.DEBUG)
+        self.fh_statistics = logging.FileHandler(os.path.join(current_log_path, f'{application}_statistics_logs.log'))
+        self.fh_statistics.setLevel(logging.INFO)
 
+        self.logger_statistics.addHandler(self.ch)
+        self.logger_statistics.addHandler(self.fh_statistics)
 # %%
 class AzureBlobUploader:
     def __init__(self, file_manager, logger):
@@ -341,6 +368,14 @@ class ScraperBase:
         self.driver.get(self.url)
         time.sleep(1)
 
+    def save_dataframe(self, df, file_path):
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            workbook = writer.book
+            workbook.strings_to_urls = False
+            df.to_excel(writer, index=False, sheet_name='AllLinks')
+        with open(file_path, 'wb') as f:
+            f.write(output.getvalue())
     def select_currency(self):
         # Base method; can be overridden in subclasses
         currency_button = self.driver.find_element(By.CSS_SELECTOR, self.css_currency)
@@ -778,12 +813,15 @@ class ScraperMusement(ScraperBase):
         ]
     
 class ScraperGYG(ScraperBase):
+    
     """
     A scraper class for GetYourGuide (GYG) website to extract product data,
     handle currency settings, manage logging, and upload results to Azure Blob Storage.
     """
-    def __init__(self, url, city, css_selectors, file_manager, logger):
+    def __init__(self, url, city, css_selectors, file_manager, logger, provider=False):
         super().__init__(url, city, css_selectors, file_manager, logger)
+        if provider:
+            self.css_provider = self.css_selectors.get('provider')
         self.activity_per_page = 16
 
     def handle_error_and_rerun(self, error):
@@ -798,6 +836,12 @@ class ScraperGYG(ScraperBase):
         # Placeholder for additional error handling (e.g., sending notifications)
         # Example: send_error_notification(error, tb)
         # 
+    def get_provider_name(self):
+        provider_name = self.driver.find_element(
+            By.CLASS_NAME, self.css_provider
+        )
+        return provider_name
+
     def daily_run_gyg(self, df_links: pd.DataFrame = pd.DataFrame(), re_run: bool = False):
         """
         Executes the daily scraping routine for GYG across specified cities and categories.
@@ -1206,3 +1250,6 @@ class ScraperGYG(ScraperBase):
         except Exception as e:
             self.logger.logger_err.error(f"Error during data cleaning: {e}")
             raise
+
+class ScraperGYG_FuturePrice(ScraperGYG):
+    pass

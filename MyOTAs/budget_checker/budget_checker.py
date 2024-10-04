@@ -178,10 +178,11 @@ def main():\
 
     # Constants
     time_per_request = 6  # seconds
-    machine_price_per_sec = 0.001851851851851852  # EUR per second
+    machine_price_per_sec = 0.001984161851851852  # EUR per second
     # Define the mapping of refresh frequency options to their numerical values
     refresh_frequency_options = {
         'Daily': 30,
+        'Twice a Day': 60,
         'Every Other Day': 15,
         'Three Times a Week': 12,
         'Twice a Week': 8,
