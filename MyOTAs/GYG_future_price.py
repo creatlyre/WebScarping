@@ -28,6 +28,8 @@ from azure.storage.blob import BlobServiceClient
 import argparse
 import sys
 import glob
+from selenium.webdriver.support.ui import Select
+
 import calendar
 import json
 
@@ -48,7 +50,7 @@ def constant_file_path():
     global output_gyg, archive_folder, link_file, logs_path, storage_account_name, storage_account_key, container_name_raw, container_name_refined,  link_file_path
 
     link_file_path = fr'G:/.shortcut-targets-by-id/1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2/MyOTAs/Baza Excel/Resource/LinksFuturePrice_GYG.json'
-    output_gyg = r'G:/.shortcut-targets-by-id/1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2/MyOTAs/Baza Excel/Get Your Guide/future_price'
+    output_gyg = r'G:/.shortcut-targets-by-id/1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2/MyOTAs/Baza Excel/GYG/future_price'
     archive_folder = fr'{output_gyg}/Archive'
     link_file = fr'G:/.shortcut-targets-by-id/1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2/MyOTAs/Baza Excel/Resource/LinksFuturePrice_GYG.csv'
     logs_path = fr'G:/.shortcut-targets-by-id/1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2/MyOTAs/Baza Excel/Logs/GYG/future_price'
@@ -225,20 +227,34 @@ def get_first_days_of_current_and_next_six_months() -> list:
     
 
 # %%
-def change_currency(driver, currency_switcher_button, currency):
-    currency_text = currency_switcher_button.text.strip()
-    if currency in currency_text:
-        print('Current currency is ',currency)
-        return
-    else: 
-                # hover over the currency switcher button to show the menu
-        actions = ActionChains(driver)
-        actions.move_to_element(currency_switcher_button).perform()
-        currency_switcher_button .click()
-        # wait for the EUR currency option to be clickable
-        eur_currency_option = WebDriverWait(driver, 60).until(EC.element_to_be_clickable((By.XPATH, "//li[@class='currency-modal-picker__item-parent item__currency-modal item__currency-modal--EUR']")))
-        # click on the EUR currency option to change the currency
-        eur_currency_option.click()
+def change_currency(driver):
+# Wait for the currency selector dropdown to be clickable
+    currency_selector = WebDriverWait(driver, 10).until(
+        EC.element_to_be_clickable((By.CSS_SELECTOR, 'select[id="footer-currency-selector"]'))
+    )
+
+    # Create a Select object for the dropdown
+    select = Select(currency_selector)
+
+    # Get the currently selected option
+    selected_option = select.first_selected_option
+    current_currency = selected_option.text.strip()
+    logger_info.info(f"Current currency selected: {current_currency}")
+
+    # Change currency if it does not match the desired currency
+    if "EUR" not in current_currency:
+        logger_info.info(f"Changing currency to EUR.")
+        desired_currency_text = 'Euro (€)'
+
+        try:
+            select.select_by_visible_text(desired_currency_text)
+            logger_info.info(f"Selected currency '{desired_currency_text}' successfully.")
+            time.sleep(2)  # Wait for the currency change to take effect
+        except Exception as e:
+            logger_err.error(f"Failed to select currency '{desired_currency_text}': {e}")
+    else:
+        logger_info.info(f"Currency already set to {desired_currency_text} for city '{city}'.")
+
 def save_and_erase_dataframe(df: pd.DataFrame, url_city_id, url_unique_identifier) -> pd.DataFrame:
     ## SAVE
     file_path = fr'{output_gyg}/{extraction_date_save_format}-{url_city_id}-GYG.csv' 
@@ -438,11 +454,22 @@ def get_future_price(driver, url, viewer, language, adults_amount,  max_days_to_
     # Calculate the number of months to complete the task by subtracting the current month from the month
     # of the future date and adding 1. This gives the total number of months covering the period from the current date to the future date.
     # Note: This calculation assumes the task spans within a single year and is intended for short-term calculations.
-    month_to_complete = picked_max_date_obj.month - datetime.datetime.now().month + 1
+    current_date = datetime.datetime.now()
+
+    year_diff = picked_max_date_obj.year - current_date.year
+    month_diff = picked_max_date_obj.month - current_date.month
+
+    if year_diff > 0:
+        # Adjust for the next year
+        month_to_complete = month_diff + (12 * year_diff) + 1
+    else:
+        month_to_complete = month_diff + 1
+
     current_year = datetime.datetime.now().year
 
     driver.get(url)
     logger_info.info(f'URL: {url} UNIQUE ID: {url_unique_identifier}')
+    logger_info.info(f'Months to complete: {month_to_complete} Picked Max Date {picked_max_date}')
 
     #Check if the language is available for that activity
 
@@ -461,9 +488,9 @@ def get_future_price(driver, url, viewer, language, adults_amount,  max_days_to_
     login_button = WebDriverWait(driver, 60).until(EC.element_to_be_clickable((By.XPATH, "//a[@title='Profile']")))
     login_button.click()
 
-    currency_switcher_button = WebDriverWait(driver, 60).until(EC.element_to_be_clickable((By.XPATH, "//a[@class='option option-currency']")))
+    # currency_switcher_button = WebDriverWait(driver, 60).until(EC.element_to_be_clickable((By.XPATH, "//a[@class='option option-currency']")))
 
-    change_currency(driver, currency_switcher_button, 'EUR')
+    change_currency(driver)
     #css selector for the box where is availability
     activity_title = driver.find_element(By.CSS_SELECTOR, "h1[data-track='activity-title']").text
     css_selector_booking_tile = f"div[data-track='booking-assistant']"

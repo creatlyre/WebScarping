@@ -424,7 +424,7 @@ def main():\
                 'adults_count': row['Adults Count'],
                 'refresh_frequency': row['Refresh Frequency per Month'],
                 'refresh_frequency_num': row['refresh_frequency_num'],
-                'cost': row['Cost (EUR)_x']
+                'cost': row['Cost (EUR) per month']
             })
         
         st.session_state.activities = activities
@@ -503,10 +503,10 @@ def main():\
         if st.session_state.formSubmit and not st.session_state.config_loaded:
             df_configuration = download_csv_from_blob(SAFUTUREPRICE_CONTAINER_NAME, BLOB_NAME, SAFUTUREPRICE_CONNECTION_STRING)
             uid = st.session_state['formSubmit']['uidText']
-            st.table(df_configuration[df_configuration['uid'] == uid])
+            st.table(df_configuration[df_configuration['Viewer'] == uid])
             if df_configuration is not None:
                 # st.markdown("### Configuration Table")
-                df_configuration = df_configuration[df_configuration['uid'] == uid]
+                df_configuration = df_configuration[df_configuration['Viewer'] == uid]
                 # st.table(df_configuration)
                 # Update the session state with the new configuration data
                 update_session_state_from_configuration(df_configuration)

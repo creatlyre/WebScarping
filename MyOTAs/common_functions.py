@@ -727,7 +727,7 @@ class ScraperMusement(ScraperBase):
                 )
             except:
                 if current_count_of_products > 400 or current_count_of_products > products_count * 0.8:
-                    self.logger.logger_info(f"Cound't find view more button che")
+                    self.logger.logger_info.info(f"Cound't find view more button che")
                     break
 
             self.driver.execute_script(
