@@ -50,3 +50,12 @@ class FilePathManager:
         'file_path_csv_operator': self.file_path_csv_operator,
         'file_path_xlsx_operator': self.file_path_xlsx_operator,
     }
+
+class Connectors_Color:
+    def __init__(self) -> None:
+        self.USERNAME = "azureadmin"
+        self.PASSWORD = "brudnyHarry!66"
+        # Define color themes
+        self.PRIMARY_BLUE = '#00AEEF'   # Medium to bright cyan blue
+        self.DARK_BLUE = '#0073B1'      # Dark blue
+        self.LIGHT_GREEN = '#DFF0D8'    # Light green for highlights
