@@ -41,7 +41,7 @@ logger = LoggerManager(file_manager_logger)
 DEBUG = DetermineDebugRun()
 # %%
 # Load the config from the JSON file
-with open('config.json', 'r') as config_file:
+with open(os.path.join(project_root, file_manager_logger.config_path), 'r') as config_file:
     config = json.load(config_file)
 config = config.get(site)
 

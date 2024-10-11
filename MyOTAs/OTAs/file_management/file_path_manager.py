@@ -27,6 +27,7 @@ class FilePathManager:
         self.container_name_raw = f"raw/daily/{self.site}"
         self.container_name_refined = f"refined/daily/{self.site}"
         self.blob_name = fr'{self.site} - {self.date_today}.xlsx'
+        self.config_path = 'resources/config.json'
 
         # Logs processed path
         self.file_path_logs_processed = fr'G:/.shortcut-targets-by-id/1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2/MyOTAs/Baza Excel/Logs/files_processed/{self.blob_name.split(".")[0]}'
@@ -50,6 +51,7 @@ class FilePathManager:
         "date_today": self.date_today,
         'file_path_csv_operator': self.file_path_csv_operator,
         'file_path_xlsx_operator': self.file_path_xlsx_operator,
+        'config_path': self.config_path
     }
 
 class ConnectorsSQL_OTA:
