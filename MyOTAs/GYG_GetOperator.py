@@ -19,6 +19,9 @@ file_path_xlsx_operator = file_manager.get_file_paths()['file_path_xlsx_operator
 
 # %%
 
+
+# %%
+
 df = pd.read_excel(file_path_xlsx_operator)
 logger.logger_info.info(f"There are {len(df[df['Operator'] == 'ToDo'])}")
 counter = 1
@@ -45,8 +48,9 @@ for index, row in df_todo.iterrows():
         logger.logger_done.info(f"Provider name fetched for row {index}: {provider_name}")
             
         df.at[index, 'Operator'] = provider_name
+        counter += 1
         if counter % 50 == 0:
-            logger.logger_done.info(f"ALready process {counter} saving progress.")
+            logger.logger_done.info(f"Already process {counter} saving progress.")
             scraper.save_dataframe(df, file_path_xlsx_operator)
     except Exception as e:
         # Log any errors encountered during the scraping process
@@ -58,6 +62,9 @@ for index, row in df_todo.iterrows():
 
 scraper.save_dataframe(df, file_path_xlsx_operator)
 
+
+# %%
+counter
 
 # %%
 

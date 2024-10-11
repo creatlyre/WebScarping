@@ -23,7 +23,7 @@ class EmailSenderAlerts:
                 },
                 "content": {
                     "subject": f"MyOTAs - Price Update for Product {self.product}",
-                    "plainText": f"Alert: The price for product ABC123 has changed from {self.price_before} to {self.price_after} for {self.alert_date}. MyOTAs Team",
+                    "plainText": f"Alert: The price for product {self.product} has changed from {self.price_before} to {self.price_after} for {self.alert_date}. MyOTAs Team",
                 }
             }
 

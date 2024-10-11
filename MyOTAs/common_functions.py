@@ -693,9 +693,12 @@ class ScraperMusement(ScraperBase):
         return products_count
 
     def get_provider_name(self):
-        provider_name = self.driver.find_element(
+        try:
+            provider_name = self.driver.find_element(
             By.CSS_SELECTOR, self.css_provider
-        )
+            )
+        except:
+            provider_name = "Not Found"
         return provider_name
 
     def load_all_products_by_button(self, products_count, scroll_step=-100):
@@ -818,11 +821,11 @@ class ScraperGYG(ScraperBase):
     A scraper class for GetYourGuide (GYG) website to extract product data,
     handle currency settings, manage logging, and upload results to Azure Blob Storage.
     """
-    def __init__(self, url, city, css_selectors, file_manager, logger, provider=False):
+    def __init__(self, url, city, css_selectors, file_manager, logger, activity_per_page=16, provider=False):
         super().__init__(url, city, css_selectors, file_manager, logger)
         if provider:
             self.css_provider = self.css_selectors.get('provider')
-        self.activity_per_page = 16
+        self.activity_per_page = activity_per_page
 
     def handle_error_and_rerun(self, error):
         """
@@ -863,7 +866,7 @@ class ScraperGYG(ScraperBase):
                 "Amsterdam", "Athens", "Barcelona", "Berlin", "Dublin", "Dubrovnik", "Florence", "Istanbul",
                 "Krakow", "Lisbon", "Madrid", "Milan", "Naples", "Paris", "Porto", "Rome", "Palermo", "Venice",
                 "Taormina", "Capri", "Sorrento", "Mount-Etna", "Mount-Vesuvius", "Herculaneum", "Amalfi-Coast",
-                "Pompeii"
+                "Pompeii", "Sintra", "Heraklion"
             ]
 
             USD_City = [
@@ -985,8 +988,6 @@ class ScraperGYG(ScraperBase):
                     'Kategoria', 'Booked', 'SiteUse', 'Miasto'
                 ])
 
-                # Data cleaning and transformation
-                df = self._clean_data(df)
 
                 # Save the DataFrame to CSV
                 file_path = f"{paths['output']}/{self.date_today}-{row['City']}-GYG.csv"
@@ -1049,8 +1050,8 @@ class ScraperGYG(ScraperBase):
             elif city in GBP_City:
                 desired_currency_text = 'British Pound (£)'
             else:
+                desired_currency_text = 'Euro (€)'
                 self.logger.logger_info.info(f"City '{city}' is not categorized for currency settings.")
-                return  # Exit if city is not categorized
 
             # Change currency if it does not match the desired currency
             if desired_currency_text not in current_currency:

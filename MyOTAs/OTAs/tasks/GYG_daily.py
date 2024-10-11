@@ -13,7 +13,7 @@ project_root = os.path.abspath(os.path.join(current_dir, '..'))
 sys.path.append(project_root)
 
 from scrapers.scraper_gyg import ScraperGYG
-from file_management.file_path_manager import FilePathManager
+from file_management.file_path_manager import FilePathManager, DetermineDebugRun
 from logger.logger_manager import LoggerManager
 from uploaders.azure_blob_uploader import AzureBlobUploader
 from backup_vm.stop_vm import StopVM
@@ -38,6 +38,8 @@ css_selectors = {
     'option_rating': 'option[value*="rating"]',
     'option_popularity': 'option[value*="relevance-city"]'
 }
+DEBUG = DetermineDebugRun()
+activity_per_page = 16
 
 # %%
 def main():
@@ -49,7 +51,11 @@ def main():
     try:
         # Initialize site and file manager
         site = "GYG"
-        file_manager = FilePathManager(site, "NA", True, "2000-10-10")  # 'NA' can be a default city or placeholder
+        if DEBUG.debug:
+            file_manager = FilePathManager(site, "NA", True, "2000-10-10")  # 'NA' can be a default city or placeholder
+        else:
+            file_manager = FilePathManager(site, "NA")  # 'NA' can be a default city or placeholder
+            
         logger = LoggerManager(file_manager)
         
         logger.logger_info.info(f"Starting scraping process for site: {site}")
@@ -62,9 +68,11 @@ def main():
         
         df_links = pd.read_csv(link_file_path)
         logger.logger_info.info(f"Loaded {len(df_links)} links from '{link_file_path}'.")
-
+        if DEBUG.debug:
+            df_links = df_links[df_links['Run'] == 1].iloc[0:10]
+            activity_per_page = 400
         # Initialize the scraper with the file manager and logger
-        scraper = ScraperGYG("N/A", "N/A", css_selectors, file_manager, logger)
+        scraper = ScraperGYG("Daily", "Daily", css_selectors, file_manager, logger, activity_per_page)
         
         # Execute the daily scraping run with the loaded links
         while True:

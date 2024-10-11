@@ -44,7 +44,7 @@ file_path_output = fr"{output_viator}/AllLinksViator - {date_today}.xlsx"
 file_path_output_processed = fr"{output_viator}/All Links Viator - {date_today}.xlsx"
 file_path_output_processed_csv = fr"{output_viator}/All Links Viator - {date_today}.csv"
 file_path_csv_operator = fr"G:\.shortcut-targets-by-id\1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2\MyOTAs\Pliki firmowe\Operators_Groups.csv"
-file_path_xlsx_operator = fr"G:\.shortcut-targets-by-id\1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2\MyOTAs\Pliki firmowe\Operators_Groups.xlsx"
+file_path_xlsx_operator = fr"G:\.shortcut-targets-by-id\1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2\MyOTAs\Pliki firmowe\Operators_Viator.xlsx"
 file_path_all_links_send_to_scraper = fr"{output_viator}\SupplierExtract - {date_today}.csv"
 file_path_all_links_send_to_scraper_finished = fr"{output_viator}\SupplierExtractFinished - {date_today}.csv"
 link_file = fr'G:/.shortcut-targets-by-id/1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2/MyOTAs/Baza Excel/Resource/Viator_links.csv'
@@ -550,6 +550,9 @@ def main():
         scraper.send_url_to_process_supplier_name()
         operator_xlsx = pd.read_xlsx(scraper.file_path_xlsx_operator)
         print(f"There are {len(operator_xlsx[operator_xlsx['Operator'] == 'ToDo'])} links to do")
+
+# %%
+
 
 # %%
 # # Create an instance of the Scraper class

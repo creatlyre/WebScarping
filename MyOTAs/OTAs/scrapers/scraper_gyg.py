@@ -17,7 +17,6 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import WebDriverException, TimeoutException
 from selenium.webdriver.support.ui import Select
 from bs4 import BeautifulSoup
-import datetime
 import traceback
 import re
 
@@ -30,11 +29,11 @@ class ScraperGYG(ScraperBase):
     A scraper class for GetYourGuide (GYG) website to extract product data,
     handle currency settings, manage logging, and upload results to Azure Blob Storage.
     """
-    def __init__(self, url, city, css_selectors, file_manager, logger, provider=False):
+    def __init__(self, url, city, css_selectors, file_manager, logger, activity_per_page=16, provider=False):
         super().__init__(url, city, css_selectors, file_manager, logger)
         if provider:
             self.css_provider = self.css_selectors.get('provider')
-        self.activity_per_page = 16
+        self.activity_per_page = activity_per_page
 
     def handle_error_and_rerun(self, error):
         """
@@ -75,7 +74,7 @@ class ScraperGYG(ScraperBase):
                 "Amsterdam", "Athens", "Barcelona", "Berlin", "Dublin", "Dubrovnik", "Florence", "Istanbul",
                 "Krakow", "Lisbon", "Madrid", "Milan", "Naples", "Paris", "Porto", "Rome", "Palermo", "Venice",
                 "Taormina", "Capri", "Sorrento", "Mount-Etna", "Mount-Vesuvius", "Herculaneum", "Amalfi-Coast",
-                "Pompeii"
+                "Pompeii", "Sintra", "Heraklion"
             ]
 
             USD_City = [
@@ -197,9 +196,6 @@ class ScraperGYG(ScraperBase):
                     'Kategoria', 'Booked', 'SiteUse', 'Miasto'
                 ])
 
-                # Data cleaning and transformation
-                df = self._clean_data(df)
-
                 # Save the DataFrame to CSV
                 file_path = f"{paths['output']}/{self.date_today}-{row['City']}-GYG.csv"
                 df.to_csv(file_path, header=not os.path.exists(file_path), index=False, mode='a')
@@ -261,8 +257,8 @@ class ScraperGYG(ScraperBase):
             elif city in GBP_City:
                 desired_currency_text = 'British Pound (£)'
             else:
+                desired_currency_text = 'Euro (€)'
                 self.logger.logger_info.info(f"City '{city}' is not categorized for currency settings.")
-                return  # Exit if city is not categorized
 
             # Change currency if it does not match the desired currency
             if desired_currency_text not in current_currency:
@@ -416,7 +412,7 @@ class ScraperGYG(ScraperBase):
                 amount_reviews,
                 discount,
                 tour_item.get_text(strip=True),
-                datetime.datetime.now().strftime('%Y-%m-%d'),
+                self.date_today,
                 position,
                 category,
                 booked,

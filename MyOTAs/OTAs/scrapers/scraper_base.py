@@ -4,6 +4,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.webdriver import WebDriver
 import time
 import pandas as pd
+import datetime
 import os
 import sys
 
@@ -39,8 +40,9 @@ class ScraperBase:
         self.css_category_label = self.css_selectors.get('category_label')
 
         # Initialize the driver
-        self.driver = self.initialize_driver()
-        self.logger.logger_info.info("Successfully initiated Scraper for city: %s", self.city)
+        if self.url != 'N/A':
+            self.driver = self.initialize_driver()
+            self.logger.logger_info.info("Successfully initiated Scraper for city: %s", self.city)
 
     def initialize_driver(self) -> WebDriver:
         try:
@@ -222,3 +224,83 @@ class ScraperBase:
                 self.logger.logger_info.info(f"Moved {csv_file} to the archive folder.")
             except FileNotFoundError as e:
                 self.logger.logger_err.error(f"Error moving {csv_file}: {str(e)}")
+    
+   
+    def all_links_excelfile(self, excel_file_path, file_path):
+        # Extract the date from the Excel file name
+        date_from_filename = os.path.basename(excel_file_path).split(' - ')[1].split(".")[0]
+
+        # Read all sheets from the Excel file into a single DataFrame
+        df_day = pd.concat(pd.read_excel(excel_file_path, sheet_name=None), ignore_index=True)
+
+        # Rename columns in df_day to match df_oper
+        df_day.rename(columns={
+                'Tytul': 'Tytul',
+                'Tytul URL': 'Link',
+                'Miasto': 'City',
+                'IloscOpini': 'Reviews',
+                'Data zestawienia': 'Date input'
+            }, inplace=True)
+        df_day['Date update'] = df_day['Date input']
+
+        df_day['Link'] = df_day['Link'].str.lower()
+
+        # Drop the columns from df_day that are not in df_oper
+        df_day = df_day[['Tytul', 'Link', 'City', 'Reviews', 'Date input', 'Date update']]
+
+        # Remove duplicates based on the 'Link' column
+        df_day = df_day.drop_duplicates(subset=['Link'])
+
+        
+
+        # Read the CSV file into a DataFrame
+        # df_oper = pd.read_csv(file_path.replace('.csv', '.xlsx'))
+        df_oper = pd.read_excel(file_path)
+        df_oper['Link'] = df_oper['Link'].str.lower()
+        # Update the 'Reviews' in df_oper from df_day
+        df_oper_updated = pd.merge(df_oper, df_day[['Link', 'Reviews']], on='Link', how='left')
+        df_oper_updated['Reviews'] = df_oper_updated['Reviews_y'].combine_first(df_oper_updated['Reviews_x'])
+        df_oper_updated.drop(columns=['Reviews_x', 'Reviews_y'], inplace=True)
+
+        # Update 'Date update' for matched links
+        df_oper_updated.loc[df_oper_updated['Reviews'].notnull(), 'Date update'] = datetime.datetime.strptime(date_from_filename, '%Y-%m-%d')
+
+        # Merge df_oper on top of df_day
+        merged_df = pd.concat([df_oper_updated, df_day], ignore_index=True)
+
+        # Drop duplicates while keeping all rows from df_oper
+        merged_df = merged_df.drop_duplicates(subset='Link', keep='first')
+        merged_df = merged_df[~merged_df['Link'].isnull()]
+        merged_df['Link'] = merged_df['Link'].astype(str)
+        # Fill empty 'Operator' column entries with 'ToDo'
+        merged_df['Operator'] = merged_df['Operator'].fillna('ToDo')
+        # Clean GYG file
+        if 'GYG' in file_path:
+            merged_df['Reviews'] = merged_df['Reviews'].apply(lambda x: str(x).lower().replace('(', '').replace(')', '').replace('reviews', '') if len(str(x)) > 0 else '0')
+            merged_df['uid'] = merged_df['Link'].apply(lambda x: str(x).split('-')[-1].replace('/', ''))
+        elif "Headout" in file_path:
+            merged_df['Reviews'] = merged_df['Reviews'].fillna(0)
+            merged_df['Reviews'] = merged_df['Reviews'].str.replace('(', '').str.replace(')','')
+            merged_df['Reviews'] = merged_df['Reviews'].apply(lambda x: int(float(x.replace('K', '')) * 1000) if isinstance(x, str) and 'K' in x else x)
+            merged_df['uid'] = merged_df['Link'].apply(lambda x: str(x).split('-')[-1].replace('/', ''))
+        elif "Musement" in file_path:
+            merged_df['Reviews'] = merged_df['Reviews'].apply(lambda x: str(x).lower().replace('(', '').replace(')', '').replace('reviews', '') if len(str(x)) > 0 else '0')
+            merged_df['uid'] = merged_df['Link'].apply(lambda x: str(x).split('-')[-1].replace('/', ''))
+        else:
+            merged_df['uid'] = merged_df['Link'].apply(lambda x: str(x).split('/')[-1])
+
+        
+        # Save the resulting DataFrame to a new file
+        output_file_path = os.path.join(file_path)
+        # merged_df.to_excel(output_file_path, index=False)
+    # Use XlsxWriter as the engine to write the Excel file
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            workbook = writer.book
+            workbook.strings_to_urls = False
+            merged_df.to_excel(writer, index=False, sheet_name='AllLinks')
+
+        with open(output_file_path, 'wb') as f:
+            f.write(output.getvalue())
+            
+        self.logger.logger_info.info(f"Processed data saved to {output_file_path}")

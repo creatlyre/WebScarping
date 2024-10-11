@@ -9,7 +9,7 @@ project_root = os.path.abspath(os.path.join(current_dir, '..'))
 sys.path.append(project_root)
 
 from scrapers.scraper_musement import ScraperMusement
-from file_management.file_path_manager import FilePathManager
+from file_management.file_path_manager import FilePathManager, DetermineDebugRun
 from logger.logger_manager import LoggerManager
 from uploaders.azure_blob_uploader import AzureBlobUploader
 from backup_vm.stop_vm import StopVM
@@ -40,7 +40,7 @@ css_selectors = {
 site = "Musement"
 file_manager_logger = FilePathManager(site, "NA")
 logger = LoggerManager(file_manager_logger)
-
+DEBUG = DetermineDebugRun()
 # %%
 
 
@@ -55,7 +55,11 @@ cities = config.get('settings').get('city')
 
 for city in cities:
     url = config.get('settings').get('url').replace("city", city)
-    file_manager = FilePathManager(site, city)
+
+    if DEBUG.debug:
+        file_manager = FilePathManager(site, city, True, '1111-11-11')
+    else:
+        file_manager = FilePathManager(site, city)
     scraper = ScraperMusement(url, city, css_selectors, file_manager, logger)
     
     
@@ -72,6 +76,8 @@ for city in cities:
     scraper.load_all_products_by_button(products_count)
     df = scraper.scrape_products(global_category=True)
     scraper.save_to_csv(df)
+    if DEBUG.debug:
+        break
     
 scraper.combine_csv_to_xlsx()
 

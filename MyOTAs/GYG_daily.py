@@ -48,6 +48,7 @@ def main():
     This function initializes the necessary managers, loads the links from the link file,
     and orchestrates the scraping and uploading processes.
     """
+
     try:
         # Initialize site and file manager
         site = "GYG"
@@ -66,7 +67,7 @@ def main():
         logger.logger_info.info(f"Loaded {len(df_links)} links from '{link_file_path}'.")
 
         # Initialize the scraper with the file manager and logger
-        scraper = common_functions.ScraperGYG("N/A", "N/A", css_selectors, file_manager, logger)
+        scraper = common_functions.ScraperGYG("N/A", "N/A", css_selectors, file_manager, logger, activity_per_page=16)
         
         # Execute the daily scraping run with the loaded links
         while True:
@@ -121,6 +122,9 @@ if __name__ == "__main__":
     main()
     
 
+
+
+# %%
 
 
 # %%
