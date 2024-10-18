@@ -425,37 +425,3 @@ class ScraperGYG(ScraperBase):
         except Exception as e:
             self.logger.logger_err.error(f"Error extracting data from tour item: {e}")
             raise
-
-    def _clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Cleans and transforms the scraped DataFrame for consistency and accuracy.
-
-        Args:
-            df (pd.DataFrame): The raw scraped DataFrame.
-
-        Returns:
-            pd.DataFrame: The cleaned and transformed DataFrame.
-        """
-        try:
-            # Clean 'Cena' by extracting the numeric part
-            df['Cena'] = df['Cena'].apply(lambda x: x.split(' ')[-1] if isinstance(x, str) and ' ' in x else x)
-
-            # Clean 'Przecena' by extracting the numeric part after 'From'
-            df['Przecena'] = df['Przecena'].apply(lambda x: x.split('From')[1] if isinstance(x, str) and 'From' in x else x)
-
-            # Convert 'IloscOpini' to integer by removing parentheses and commas
-            df['IloscOpini'] = df['IloscOpini'].apply(
-                lambda x: int(re.sub(r'[^\d]', '', x)) if isinstance(x, str) and re.search(r'\d', x) else x
-            )
-
-            # Add or clean 'VPN_City' column if necessary
-            if 'VPN_City' not in df.columns:
-                df['VPN_City'] = ''
-
-            self.logger.logger_info.info("Data cleaning and transformation completed.")
-            return df
-
-        except Exception as e:
-            self.logger.logger_err.error(f"Error during data cleaning: {e}")
-            raise
-

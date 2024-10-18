@@ -38,8 +38,6 @@ css_selectors = {
     'option_rating': 'option[value*="rating"]',
     'option_popularity': 'option[value*="relevance-city"]'
 }
-DEBUG = DetermineDebugRun()
-activity_per_page = 16
 
 # %%
 def main():
@@ -48,6 +46,8 @@ def main():
     This function initializes the necessary managers, loads the links from the link file,
     and orchestrates the scraping and uploading processes.
     """
+    DEBUG = DetermineDebugRun()
+    activity_per_page = 16
     try:
         # Initialize site and file manager
         site = "GYG"
@@ -71,6 +71,7 @@ def main():
         if DEBUG.debug:
             df_links = df_links[df_links['Run'] == 1].iloc[0:10]
             activity_per_page = 400
+        
         # Initialize the scraper with the file manager and logger
         scraper = ScraperGYG("Daily", "Daily", css_selectors, file_manager, logger, activity_per_page)
         

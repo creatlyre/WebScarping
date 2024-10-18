@@ -67,6 +67,7 @@ def constant_file_path():
 def configure_dates_and_file_names(adutls, language):
     global date_today, extraction_date, extraction_date_save_format, local_file_path, blob_name,  file_path_logs_processed, output_file_path
     date_today = datetime.date.today().strftime("%Y-%m-%d")
+    # date_today = '2024-12-30'
     # Format the date and time as a string
     extraction_date = datetime.datetime.now().strftime('%Y-%m-%d %H:00:00')
     extraction_date_save_format = f"{extraction_date.replace(' ', '_').replace(':','-')}_{language}_{adutls}"
@@ -368,7 +369,7 @@ def check_if_current_day_done_or_partly_done(url_city_id, url_unique_identifier)
         # If the file does not exist or 'date' column is not found, return False and None
     return False, None
 
-def check_if_today_done_on_schedule(url, schedule):
+def check_if_today_done_on_schedule_in_csv(url, schedule):
 
     url_unique_identifier = url.split('.com/')[-1].split('-')[-1].replace('/', '')
     url_city_id = url.split('.com/')[-1].split('/')[0]
@@ -396,7 +397,6 @@ def check_if_today_done_on_schedule(url, schedule):
                 return True
         # If the file does not exist or 'date' column is not found, return False and None
     return False
-
 # %%
 def check_for_modal_window_to_close(driver, calendar_picker):
     try:
@@ -409,6 +409,24 @@ def check_for_modal_window_to_close(driver, calendar_picker):
         driver.execute_script("arguments[0].scrollIntoView(true);", calendar_picker)
         calendar_picker.click()
 
+def check_and_click_only_essential(driver):
+    try:
+        # Wait until the cookie banner is visible
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, ".ot-sdk-container"))
+        )
+        
+        # Check if the "Only Essential" button is present
+        only_essential_button = driver.find_element(By.ID, "onetrust-reject-all-handler")
+        
+        if only_essential_button:
+            # Click the "Only Essential" button
+            only_essential_button.click()
+            print("Clicked 'Only Essential'.")
+        else:
+            print("'Only Essential' button not found.")
+    except Exception as e:
+        print(f"An error occurred: {e}")
 # %%
 def get_future_price(driver, url, viewer, language, adults_amount,  max_days_to_complete):
     logger_info.info(f"Adults amount: {adults_amount}")
@@ -425,7 +443,6 @@ def get_future_price(driver, url, viewer, language, adults_amount,  max_days_to_
     url_city_id = url.split('.com/')[-1].split('/')[0]
     
     
-    # start_collection_date = '2024-04-29'
     start_collection_date = date_today
 
     date_today_obj = (datetime.datetime.strptime(start_collection_date, "%Y-%m-%d"))
@@ -515,8 +532,11 @@ def get_future_price(driver, url, viewer, language, adults_amount,  max_days_to_
             #Skipping the URL
             return 
         # continue
-
+    time.sleep(2)
+    check_and_click_only_essential(driver)
     driver.execute_script("arguments[0].click();", button_check_availability)
+    
+
     try:
         WebDriverWait(driver, 5).until(EC.visibility_of_element_located((By.CLASS_NAME, 'dayContainer')))
         months = driver.find_elements(By.CLASS_NAME, 'dayContainer')
@@ -570,6 +590,8 @@ def get_future_price(driver, url, viewer, language, adults_amount,  max_days_to_
             months = driver.find_elements(By.CLASS_NAME, 'dayContainer')
             month = months[1]
             current_month = driver.find_elements(By.CLASS_NAME, "flatpickr-current-month")[1].text.strip()
+            if current_month == "January":
+                current_year = current_year + 1
             current_month_done = False
         else:
             current_month = driver.find_elements(By.CLASS_NAME, "flatpickr-current-month")[0].text.strip()
@@ -616,7 +638,7 @@ def get_future_price(driver, url, viewer, language, adults_amount,  max_days_to_
             WebDriverWait(driver, 60).until(EC.visibility_of_element_located((By.TAG_NAME, 'details')))
             option_detials = driver.find_elements(By.TAG_NAME, 'details')
             time.sleep(2)
-            list_of_items = extract_options(driver=driver, option_detials=option_detials, activity_title=activity_title, language=language, url=url_id, viewer=viewer, adults_amount=2)
+            list_of_items = extract_options(driver=driver, option_detials=option_detials, activity_title=activity_title, language=language, url=url_id, viewer=viewer, adults_amount=adults_amount)
             ### After extraction transform to dataframe and save it in the CSV file in case of any error in th future
             df = pd.DataFrame(list_of_items)
             # display(df)
@@ -675,7 +697,7 @@ def process_csv_files(folder_path, adults, language):
 
 
 # %%
-# get_future_price(language='en', adults_amount='2', max_days_to_complete=2)
+
 def upload_excel_to_azure_storage_account(local_file_path, storage_account_name, storage_account_key, container_name_raw, blob_name):
     try:
         # Create a connection string to the Azure Storage account
@@ -781,19 +803,6 @@ def transform_upload_to_refined(local_file_path, storage_account_name, storage_a
 
 
 # %%
-def in_notebook():
-    try:
-        shell = get_ipython().__class__.__name__
-        if shell == 'ZMQInteractiveShell':
-            return True   # Jupyter notebook or qtconsole
-        elif shell == 'TerminalInteractiveShell':
-            return False  # Terminal running IPython
-        else:
-            return False  # Other type (?)
-    except NameError:
-        return False      # Probably standard Python interpreter
-
-# %%
 ###
 ### TO DO: CONFIFURE THE SCRIPT BELOW TO RUN ON BETTER SCHEDULE. AS OF NOW IF THE WEEKLY UPDATE (4) WILL BE SAME DAY AS MONTHLY (1) THE WEEKLY UPDATE WILL BE DONE 3 TIMES A MONTH NOT 4
 ### WHERE IT SHOULD RUN ON BASED FREQEUNCY IF REQEUSTED WEEKLY IN A MONTH THE UDPATE SHOULD BE TRIGGERED 4 TIMES IN MONTH EVEN IF THE DAY IS THE SAME AS HIGEHR REFRESH, 
@@ -802,7 +811,7 @@ def in_notebook():
 
 def should_run_today(day, month_length, frequency):
     if frequency == 1:
-        # Run only on the first day of the month
+        # Run only on the second day of the month
         if day == 2:
             return True
     else:
@@ -812,6 +821,39 @@ def should_run_today(day, month_length, frequency):
             if day == 1 + i * interval:
                 return True
         return False
+
+def calculate_execution_days(frequency, month_length):
+    """
+    Calculate the days of execution in the month based on the frequency.
+    """
+    execution_days = []
+    if frequency == 1:
+        # Only the first day of the month
+        execution_days.append(1)
+    else:
+        # Run multiple times a month
+        interval = month_length // frequency
+        for i in range(frequency):
+            execution_day = 1 + i * interval
+            if execution_day <= month_length:
+                execution_days.append(execution_day)
+    return execution_days
+
+def get_schedule_execution_days(schedules):
+    """
+    For each schedule frequency, determine the days of execution within the current month.
+    """
+    today = datetime.datetime.today()
+    month_length = calendar.monthrange(today.year, today.month)[1]
+    
+    schedule_days = {}
+    for freq in schedules.keys():
+        frequency = int(freq)
+        execution_days = calculate_execution_days(frequency, month_length)
+        schedule_days[frequency] = execution_days
+        print(f"Frequency {frequency} times/month has execution days: {execution_days}")
+    
+    return schedule_days
 
 def get_highest_order_schedule(schedules):
     today = datetime.datetime.today()
@@ -828,10 +870,6 @@ def get_highest_order_schedule(schedules):
 
     return "No schedule for today", None
 
-# %%
-if in_notebook():
-    # Simulate the command-line arguments for Jupyter Notebook
-    sys.argv = ['script_name', '--ADULTS', '4', '--LANGUAGE', 'en', '--MAX_DAYS', '5']
 
 # %%
 # if __name__ == "__main__":
@@ -905,7 +943,7 @@ for site in config['urls']:
             break
        #Check if current day was done and its in Archive folder
         configure_dates_and_file_names(adults, language)
-        today_file_in_arhcive = check_if_today_done_on_schedule(url=url, schedule=schedule)
+        today_file_in_arhcive = check_if_today_done_on_schedule_in_csv(url=url, schedule=schedule)
         if today_file_in_arhcive:
             logger_done.info(f"File in archive for URL: {url}, Adults: {adults}, Language: {language} ")
             
@@ -924,12 +962,65 @@ for adults, language in combinations:
     transform_upload_to_refined(output_file_path, storage_account_name, storage_account_key, container_name_refined, blob_name)
 
 # %%
+#### DEBUG RUN FOR CHECKING DAYS WHEN PRODUCT WILL BE DONE
+# constant_file_path()
 
+# with open(link_file_path) as f:
+#     config = json.load(f)
+# combinations = set()
+# for site in config['urls']:
+#     url = site['url']
+#     viewer = site["viewer"]
+#     for config in site['configurations']:
+#         adults = config['adults']
+#         language = config['language']
+#         schedules = config['schedules']
+#         schedule_days = get_schedule_execution_days(schedules)
+#         print(f"For configuration {url} - {adults} adults, schedule days are: {schedule_days}")
+
+# %%
+### DEBUG RUN
+# constant_file_path()
+
+# with open(link_file_path) as f:
+#     config = json.load(f)
+# # Initialize an empty set to store unique combinations
+# combinations = set()
+
+# # Loop through each site and its configurations
+# for site in config['urls']:
+#     url = site['url']
+#     viewer = site["viewer"]
+#     for config in site['configurations']:
+#         adults = config['adults']
+#         language = config['language']
+#         schedules = config['schedules']
+        
+        
+#         # Add the combination (adults, language) to the set
+#         combinations.add((adults, language))
+
+# # Output the unique combinations set
+# print(combinations)
 
 # %%
 
+# adults= 4
+# language
+# configure_dates_and_file_names(adults, language)
+# define_logging()
+# schedule, max_days = get_highest_order_schedule(schedules)
+
+# driver = initilize_driver()
+# get_future_price(driver=driver, adults_amount=adults ,language=language, max_days_to_complete=max_days, url=url, viewer=viewer)
 
 # %%
+# adults = 6
+# language = 'en'
+# configure_dates_and_file_names(adults, language)
+# process_csv_files(output_gyg, adults, language)
+# upload_excel_to_azure_storage_account(output_file_path, storage_account_name, storage_account_key, container_name_raw, blob_name)
+# transform_upload_to_refined(output_file_path, storage_account_name, storage_account_key, container_name_refined, blob_name)
 
 
 # %%

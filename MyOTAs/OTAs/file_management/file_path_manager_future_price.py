@@ -17,7 +17,7 @@ class FilePathManagerFuturePrice(FilePathManager):
             self.adults = adults
             self.language = language
             self.output = fr'G:/.shortcut-targets-by-id/1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2/MyOTAs/Baza Excel/{self.site}/future_price'
-
+            self.link_file_path = fr'G:/.shortcut-targets-by-id/1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2/MyOTAs/Baza Excel/Resource/LinksFuturePrice_GYG.json'
             self.extraction_date = datetime.datetime.now().strftime('%Y-%m-%d %H:00:00')
             self.extraction_date_save_format = f"{self.extraction_date.replace(' ', '_').replace(':','-')}_{self.language}_{self.adults}"
             # Set the path of the local file

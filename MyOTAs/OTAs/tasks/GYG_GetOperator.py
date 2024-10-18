@@ -60,16 +60,18 @@ for index, row in df_todo.iterrows():
         logger.logger_done.info(f"Provider name fetched for row {index}: {provider_name}")
             
         df.at[index, 'Operator'] = provider_name
+
+    except Exception as e:
+        # Log any errors encountered during the scraping process
+        logger.logger_err.error(f"Error processing row {index} with URL {url}: {str(e)}")
+        df.at[index, 'Operator'] = "NotFound"
+    finally:
+        # Ensure that the driver is closed
+        # scraper.quit_driver()
         counter += 1
         if counter % 50 == 0:
             logger.logger_done.info(f"Already process {counter} saving progress.")
             scraper.save_dataframe(df, file_path_xlsx_operator)
-    except Exception as e:
-        # Log any errors encountered during the scraping process
-        logger.logger_err.error(f"Error processing row {index} with URL {url}: {str(e)}")
-    finally:
-        # Ensure that the driver is closed
-        # scraper.quit_driver()
         logger.logger_done.info(f"Closed scraper for URL: {url}")
 
 scraper.save_dataframe(df, file_path_xlsx_operator)

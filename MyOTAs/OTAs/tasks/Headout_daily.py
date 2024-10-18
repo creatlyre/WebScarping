@@ -1,3 +1,4 @@
+# %%
 import os
 import sys
 
@@ -39,6 +40,7 @@ site = "Headout"
 file_manager_logger = FilePathManager(site, "NA")
 logger = LoggerManager(file_manager_logger)
 DEBUG = DetermineDebugRun()
+DEBUG.debug = False
 # %%
 # Load the config from the JSON file
 with open(os.path.join(project_root, file_manager_logger.config_path), 'r') as config_file:
