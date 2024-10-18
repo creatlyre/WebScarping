@@ -48,8 +48,6 @@ def main():
     """
     DEBUG = DetermineDebugRun()
     activity_per_page = 16
-
-    
     try:
         # Initialize site and file manager
         site = "GYG"
