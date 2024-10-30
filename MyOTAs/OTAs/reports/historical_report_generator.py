@@ -1,5 +1,5 @@
 # OTAs/reports/historical_report_generator.py
-
+import numpy as np
 import pyodbc
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -185,6 +185,116 @@ class HistoricalReportGenerator:
         except Exception as e:
             logging.error(f"Error fetching data: {str(e)}")
             return None
+        
+    def generate_dynamic_explanations_price_over_time(self, df_primary):
+    # Calculate basic stats for price data
+        price_min = df_primary['Cena'].min()
+        price_max = df_primary['Cena'].max()
+        price_mean = df_primary['Cena'].mean()
+        price_std = df_primary['Cena'].std()
+
+        # Identify date range for specific price changes
+        first_price_date = df_primary['Data zestawienia'].iloc[0].strftime('%Y-%m-%d')
+        last_price_date = df_primary['Data zestawienia'].iloc[-1].strftime('%Y-%m-%d')
+
+        # Identify the biggest price change and when it happened
+        price_diff = df_primary['Cena'].diff().abs().max()
+        idx_of_largest_change = df_primary['Cena'].diff().abs().idxmax()
+        price_change_date = df_primary['Data zestawienia'].iloc[idx_of_largest_change].strftime('%Y-%m-%d')
+
+        # Calculate the largest price change as a percentage
+        previous_price = df_primary['Cena'].iloc[idx_of_largest_change - 1] if idx_of_largest_change > 0 else df_primary['Cena'].iloc[0]
+        price_diff_percentage = (price_diff / previous_price) * 100 if previous_price != 0 else 0
+
+        # Check for price trends (e.g., increasing, decreasing, fluctuating)
+        price_trend = np.polyfit(mdates.date2num(df_primary['Data zestawienia']), df_primary['Cena'], 1)[0]
+
+        # Determine if the price is stable (low standard deviation) or fluctuating
+        if price_std < 1:
+            price_stability_desc = "The price has remained quite stable over time, suggesting steady demand and pricing policies."
+        elif price_trend > 0:
+            price_stability_desc = "The price has been increasing over time, which could indicate rising demand or increasing operational costs."
+        elif price_trend < 0:
+            price_stability_desc = "The price has been decreasing, possibly due to seasonal promotions or reduced demand."
+        else:
+            price_stability_desc = "The price has fluctuated significantly, possibly due to seasonal promotions or changes in market conditions."
+
+        # Frequency of price changes
+        change_frequency = df_primary['Cena'].diff().ne(0).sum()
+        if change_frequency > 5:
+            change_freq_desc = f"There have been frequent price adjustments, with {change_frequency} changes recorded over the observed period."
+        else:
+            change_freq_desc = f"There have been only {change_frequency} major price changes during the observed period, indicating long periods of price stability."
+
+        # Magnitude of largest price change
+        largest_change_desc = f"The most significant price change was €{price_diff:.2f} ({price_diff_percentage:.2f}%) on {price_change_date}, which may reflect a major market shift or promotional event."
+
+        # Calculate the cumulative price change over the period
+        cumulative_price_change = df_primary['Cena'].iloc[-1] - df_primary['Cena'].iloc[0]
+        cumulative_percentage_change = (cumulative_price_change / df_primary['Cena'].iloc[0]) * 100 if df_primary['Cena'].iloc[0] != 0 else 0
+        if cumulative_price_change > 0:
+            cumulative_change_desc = f"Over the entire period, there was a cumulative price increase of €{cumulative_price_change:.2f} ({cumulative_percentage_change:.2f}%)."
+        elif cumulative_price_change < 0:
+            cumulative_change_desc = f"Over the entire period, there was a cumulative price decrease of €{abs(cumulative_price_change):.2f} ({abs(cumulative_percentage_change):.2f}%)."
+        else:
+            cumulative_change_desc = "The price remained unchanged over the entire period."
+
+        # Identify periods of stability
+        stable_periods = (df_primary['Cena'].diff() == 0).sum()
+        if stable_periods > 0:
+            stability_duration_desc = f"The price remained stable for {stable_periods} days throughout the observed period."
+        else:
+            stability_duration_desc = "There were no long periods of stability, indicating frequent price changes."
+
+        # Check for seasonal price patterns (if the data covers multiple seasons)
+        df_primary['month'] = df_primary['Data zestawienia'].dt.month
+        summer_prices = df_primary[df_primary['month'].isin([6, 7, 8])]['Cena']
+        winter_prices = df_primary[df_primary['month'].isin([12, 1, 2])]['Cena']
+        
+        if not summer_prices.empty and not winter_prices.empty:
+            if summer_prices.mean() > winter_prices.mean():
+                seasonality_desc = "Prices were generally higher during the summer months, indicating increased demand."
+            elif summer_prices.mean() < winter_prices.mean():
+                seasonality_desc = "Prices were lower during the summer months, potentially reflecting off-season discounts."
+            else:
+                seasonality_desc = "Prices remained consistent across both summer and winter seasons."
+        else:
+            seasonality_desc = "No significant seasonal price patterns were observed."
+
+        # Identify months with highest and lowest average prices
+        df_primary['month_year'] = df_primary['Data zestawienia'].dt.to_period('M')
+        avg_price_per_month = df_primary.groupby('month_year')['Cena'].mean()
+        month_with_highest_price = avg_price_per_month.idxmax()
+        highest_avg_price = avg_price_per_month.max()
+        month_with_lowest_price = avg_price_per_month.idxmin()
+        lowest_avg_price = avg_price_per_month.min()
+
+        # Include price trend description
+        if price_trend > 0:
+            trend_desc = "Trend analysis indicates that prices have been increasing over the period, suggesting underlying market conditions are driving prices up."
+        elif price_trend < 0:
+            trend_desc = "Trend analysis indicates that prices have been decreasing over the period, suggesting underlying market conditions are causing prices to fall."
+        else:
+            trend_desc = "Trend analysis indicates that prices have remained stable over the period, suggesting steady market conditions."
+
+        # Determine price volatility description
+        volatility_desc = f"Price volatility, measured by a standard deviation of €{price_std:.2f}, indicates {'low' if price_std < 1 else 'high'} variability in pricing."
+
+        # Generate dynamic description for 'Price Over Time' chart
+        price_over_time_desc = (
+            f"This chart illustrates how the price of the tour has evolved over time in the primary category, covering the period from {first_price_date} to {last_price_date}. "
+            f"Throughout this timeframe, the price fluctuated between a low of €{price_min:.2f} and a high of €{price_max:.2f}, averaging €{price_mean:.2f}. "
+            f"{largest_change_desc} {cumulative_change_desc} "
+            f"{trend_desc} "
+            f"{volatility_desc} "
+            f"An analysis of monthly averages reveals that the highest average price occurred in {month_with_highest_price.strftime('%B %Y')}, reaching €{highest_avg_price:.2f}, while the lowest was in {month_with_lowest_price.strftime('%B %Y')}, at €{lowest_avg_price:.2f}. "
+            f"This suggests potential seasonal trends or market dynamics influencing pricing. "
+            f"{price_stability_desc} {change_freq_desc} {stability_duration_desc} {seasonality_desc}"
+        )
+
+        return price_over_time_desc
+
+
 
     def clean_data(self, df, df_categories):
         """
@@ -317,7 +427,6 @@ class HistoricalReportGenerator:
         # Calculate average review increase per day
         if days_collected > 0:
             average_review_increase_per_day = (max_reviews - min_reviews) / days_collected
-            average_review_increase_per_day.riu
         else:
             average_review_increase_per_day = None 
 
@@ -336,6 +445,8 @@ class HistoricalReportGenerator:
         plt.close()
         price_over_time_img.seek(0)
         plots['Price Over Time'] = Image.open(price_over_time_img)
+
+        price_over_time_desc = self.generate_dynamic_explanations_price_over_time(df_primary)
 
         # Calculate Average Number of Reviews per Day
         reviews_daily_primary = df_primary.groupby(pd.Grouper(key='Data zestawienia', freq='D'))['IloscOpini'].mean().reset_index()
@@ -538,7 +649,7 @@ class HistoricalReportGenerator:
 
         # Chart explanations
         chart_explanations = {
-            'Price Over Time': 'This chart shows how the price of the tour has changed over time for the primary category. A stable price suggests consistent demand, while fluctuations may indicate seasonal promotions or changes in operating costs.',
+            'Price Over Time': f'{price_over_time_desc}',
             'Average Number of Reviews Over Time': 'This chart illustrates the trend in the average number of reviews per day over time for the primary category, reflecting customer engagement and satisfaction levels.',
             'Average Number of Bookings Over Time': 'This chart shows the trend in the average number of bookings per day over time for the primary category, indicating customer purchasing behavior.',
             'Price Distribution': 'This chart shows the distribution of prices for the tour within the primary category, indicating the most common price points.',

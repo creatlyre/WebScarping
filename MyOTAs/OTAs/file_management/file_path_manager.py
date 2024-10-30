@@ -58,6 +58,10 @@ class ConnectorsSQL_OTA:
     def __init__(self) -> None:
         self.USERNAME = "azureadmin"
         self.PASSWORD = "brudnyHarry!66"
+        self.API_KEY_SCRAPERAPI = '8c36bc42cd11c738c1baad3e2000b40c' # https://dashboard.scraperapi.com/
+        self.API_KEY_ZENROWS = '56ed5b7f827aa5c258b3f6d3f57d36999aa949e8' # https://app.zenrows.com/buildera
+        self.API_KEY_BOTOSLAW1_RATES = 'acfed48df1159d37fa4305e5e95c234f'
+        self.API_KEY_BOTOSLAW2_RATES = '49b0ef06a9d57046eac0a36aafdd76e7'
 
 class DetermineDebugRun:
     def __init__(self, check_for_debug=True):
