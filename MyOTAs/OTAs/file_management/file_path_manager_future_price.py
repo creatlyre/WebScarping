@@ -24,6 +24,6 @@ class FilePathManagerFuturePrice(FilePathManager):
             # Azure Storage containers and blob name
             self.container_name_raw = f"raw/future_price/{self.site}"
             self.container_name_refined = f"refined/future_price/{self.site}"
-            self.output_file_path = f"{self.output}/{self.extraction_date_save_format}_future_price.xlsx" # AKA output_file_path
+            self.output_file_path = f"{self.output}/{self.site}_{self.extraction_date_save_format}_future_price.xlsx" # AKA output_file_path
             self.blob_name = fr'{self.extraction_date_save_format}_future_price.xlsx'
 #

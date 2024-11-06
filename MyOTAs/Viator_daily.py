@@ -573,19 +573,24 @@ def extract_data_html_data_automation(tour_item):
 
 
     try:
-        star_int = 0
-        stars_grouped = tour_item.select_one("[class*=stars]").find_all('svg')
-        half_star = 'M14'
-        for st in stars_grouped:
-            path_text = str(st.find('path')['d'])
-            if half_star in path_text:
-                star_int = star_int + 0.5
-            else:
-                if '0a.77.77' in str(st):
-                    star_int = star_int + 1
-        stars = f'star-{str(star_int)}'
+        start_amount = tour_item.select_one("[class*=rating__JCMy]").text.strip()
+        
+        stars = f'star-{str(start_amount)}'
     except:
-        stars = 'N/A'
+        try:
+            star_int = 0
+            stars_grouped = tour_item.select_one("[class*=stars]").find_all('svg')
+            half_star = 'M14'
+            for st in stars_grouped:
+                path_text = str(st.find('path')['d'])
+                if half_star in path_text:
+                    star_int = star_int + 0.5
+                else:
+                    if '0a.77.77' in str(st):
+                        star_int = star_int + 1
+            stars = f'star-{str(star_int)}'
+        except:
+            stars = 'N/A'
 
     text = tour_item.text.strip()
     return title, product_url, price, stars, amount_reviews, discount, text, siteuse\

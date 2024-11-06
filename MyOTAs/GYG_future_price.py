@@ -66,11 +66,23 @@ def constant_file_path():
 
 def configure_dates_and_file_names(adutls, language):
     global date_today, extraction_date, extraction_date_save_format, local_file_path, blob_name,  file_path_logs_processed, output_file_path
-    date_today = datetime.date.today().strftime("%Y-%m-%d")
-    # date_today = '2024-12-30'
-    # Format the date and time as a string
-    extraction_date = datetime.datetime.now().strftime('%Y-%m-%d %H:00:00')
-    extraction_date_save_format = f"{extraction_date.replace(' ', '_').replace(':','-')}_{language}_{adutls}"
+    # Define the automatic date setting as today's date
+    automatic_date_today = datetime.date.today().strftime("%Y-%m-%d")
+
+    # Manually set date (uncomment to use manual date)
+    # date_today = '2024-12-15'
+
+    # Check if date_today exists; if not, fall back to automatic date
+    try:
+        date_today
+    except NameError:
+        date_today = automatic_date_today
+
+    # Set extraction_date to use date_today with the current hour
+    current_hour = datetime.datetime.now().strftime('%H:00:00')
+    extraction_date = f"{date_today} {current_hour}"
+    extraction_date_save_format = f"{extraction_date.replace(' ', '_').replace(':', '-')}_{language}_{adutls}"
+
     # Set the path of the local file
 
     local_file_path = f"{output_gyg}/{extraction_date}_future_price.xlsx"
@@ -542,6 +554,8 @@ def get_future_price(driver, url, viewer, language, adults_amount,  max_days_to_
         months = driver.find_elements(By.CLASS_NAME, 'dayContainer')
         for month in months:
             days_available = month.find_elements(By.CSS_SELECTOR, "span[data-test-id=ba-calendar-day-available]")
+            if len(days_available) == 0:
+                continue
             for day in days_available:
                 if day.text == "" or len(day.text) == 0:
                     print("Day was empty")
