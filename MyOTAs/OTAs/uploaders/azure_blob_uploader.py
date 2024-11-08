@@ -11,7 +11,7 @@ class AzureBlobUploader:
         self.container_name_raw = self.file_manager.get_file_paths()['container_name_raw']
         self.container_name_refined = self.file_manager.get_file_paths()['container_name_refined']
         self.blob_name = self.file_manager.get_file_paths()['blob_name']
-        self.file_path_output = self.file_manager.get_file_paths()['file_path_output']
+        self.file_path_output = self.file_manager.get_file_paths()['file_path_output'] # OUTPUT FILE PATH FOR DAILY UDPATES
         self.logger = logger
         self.connection_string = f"DefaultEndpointsProtocol=https;AccountName={self.storage_account_name};AccountKey={self.storage_account_key};EndpointSuffix=core.windows.net"
 
@@ -110,6 +110,69 @@ class AzureBlobUploader:
 
             with open(output_file_path, "rb") as data:
                 container_client.upload_blob(name=self.blob_name, data=data)
+            
+            self.logger.logger_done.info("File uploaded successfully to Azure Blob Storage (refined).")
+
+        except Exception as e:
+            self.logger.logger_err.error(f"An error occurred while transforming and uploading to refined storage: {e}")
+            
+        finally:
+            # Clean up the temporary file
+            if os.path.exists(output_file_path):
+                os.remove(output_file_path)
+
+
+    def upload_excel_to_azure_storage_account(self, future_price_file_path, future_price_blob_name):
+        """
+        Uploads the Excel file to Azure Blob Storage under the "raw" container.
+        """
+        try:
+            # Create a BlobServiceClient object using the connection string
+            blob_service_client = BlobServiceClient.from_connection_string(self.connection_string)
+
+            # Get a reference to the container
+            container_client = blob_service_client.get_container_client(self.container_name_raw)
+
+            # Upload the file to Azure Blob Storage
+            with open(future_price_file_path, "rb") as file:
+                container_client.upload_blob(name=future_price_blob_name, data=file)
+            
+            self.logger.logger_done.info("File uploaded successfully to Azure Blob Storage (raw).")
+
+        except Exception as e:
+            self.logger.logger_err.error(f"An error occurred while uploading to raw storage: {e}")
+
+    def transform_upload_to_refined_future_price(self, future_price_file_path, future_price_blob_name):
+        """
+        Transforms and uploads the Excel file to Azure Blob Storage under the "refined" container.
+        """
+        output_file_path = "temp_file.xlsx"  # Temporary file for transformation
+
+        try:
+            # Write the transformed data to a new Excel file
+            df = pd.read_excel(future_price_file_path)
+            # city replacment if there are incorrect in url
+            
+            # Make changes to the df DataFrame as needed
+            df['extraction_date'] = df['extraction_date'].astype('str')
+            df['date'] = df['date'].astype('str')
+            df['price_per_person'] = df['price_per_person'].astype('str')
+            df['price_per_person'] = df['price_per_person'].map(lambda x: x.split(' ')[-1] if x != 'Price unavailable' else x)
+            df['price_per_person'] = df['price_per_person'].replace(r'[$€£]', '', regex=True).str.replace(',', '').str.strip()
+            df['total_price'] = df.apply(lambda row: float(row['price_per_person']) * int(row['adutls']) if row['availability'] != False else "Price unavailable", axis=1)
+
+            df['total_price'] = df['total_price'].astype('str')
+            
+            # Save modified DataFrame to an Excel file temporarily
+            df.to_excel(output_file_path, index=False)
+            # Create a connection to Azure Blob Storage
+
+    # Upload the transformed Excel file to Azure Blob Storage
+            blob_service_client = BlobServiceClient.from_connection_string(self.connection_string)
+            container_client = blob_service_client.get_container_client(self.container_name_refined)
+
+            with open(output_file_path, "rb") as data:
+                container_client.upload_blob(name=future_price_blob_name, data=data)
             
             self.logger.logger_done.info("File uploaded successfully to Azure Blob Storage (refined).")
 

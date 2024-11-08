@@ -67,4 +67,19 @@ class LoggerManager:
         """Ensures the main logs folder exists."""
         if not os.path.exists(self.logs_path):
             os.makedirs(self.logs_path)
+
+    def close_logger(self):
+        """Closes all handlers for each logger to release resources."""
+        for handler in self.logger_err.handlers[:]:
+            handler.close()
+            self.logger_err.removeHandler(handler)
+        
+        for handler in self.logger_info.handlers[:]:
+            handler.close()
+            self.logger_info.removeHandler(handler)
+
+        for handler in self.logger_done.handlers[:]:
+            handler.close()
+            self.logger_done.removeHandler(handler)
+        print("All loggers closed successfully.")
 # %

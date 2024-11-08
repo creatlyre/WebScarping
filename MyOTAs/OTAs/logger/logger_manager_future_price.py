@@ -23,4 +23,13 @@ class LoggerManagerFuturePrice(LoggerManager):
 
         self.logger_statistics.addHandler(self.ch)
         self.logger_statistics.addHandler(self.fh_statistics)
+
+    def close_logger(self):
+        super().close_logger()
+        for handler in self.logger_statistics.handlers[:]:
+            handler.close()
+            self.logger_statistics.removeHandler(handler)
+        
+    
+    
 # %%

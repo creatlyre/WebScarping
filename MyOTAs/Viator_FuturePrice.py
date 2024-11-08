@@ -19,17 +19,19 @@ import time
 import glob
 from OTAs.logger.logger_manager_future_price import LoggerManagerFuturePrice
 from OTAs.file_management.file_path_manager_future_price import FilePathManagerFuturePrice
+from OTAs.file_management.config_manager_future_price import ConfigReader
+from OTAs.uploaders.azure_blob_uploader import AzureBlobUploader
 
 # Allow nested event loops
 nest_asyncio.apply()
 
 class ViatorScraper:
-    def __init__(self, api_key, urls_to_scrape, file_manager, date_start_str, timeframe_days_to_collect=7, num_adults=1, language='en', extract_hours=False):
+    def __init__(self, api_key, url, viewer, file_manager, date_start_str, timeframe_days_to_collect=7, num_adults=1, language='en', extract_hours=False):
         self.api_key = api_key
         european_countries = [
             'al', 'ad', 'at', 'by', 'be', 'ba', 'bg', 'hr', 'cy', 'cz', 'dk', 'ee', 'fi', 
             'fr', 'de', 'gr', 'hu', 'is', 'ie', 'it', 'lv', 'li', 'lt', 'lu', 'mt', 'md', 
-            'mc', 'me', 'nl', 'mk', 'no', 'pl', 'pt', 'ro', 'ru', 'sm', 'rs', 'sk', 'si', 
+            'mc', 'me', 'nl', 'mk', 'no', 'pl', 'pt', 'ro', 'ru', 'sm', 'sk', 'si', 
             'es', 'se', 'ch', 'ua', 'gb']
         
         # Choose a random country code from the list for the proxy
@@ -37,7 +39,8 @@ class ViatorScraper:
         self.language = language
         self.date_start_str = date_start_str
         self.connection_url = f'wss://browser.zenrows.com?apikey={api_key}&proxy_country={self.proxy_country}&session_ttl=15m'
-        self.urls_to_scrape = urls_to_scrape
+        self.url = url
+        self.viewer = viewer
         self.timeframe_days_to_collect = timeframe_days_to_collect
         self.num_adults = num_adults
         self.date_start = datetime.strptime(date_start_str, "%Y-%m-%d %H:00:00")
@@ -109,7 +112,10 @@ class ViatorScraper:
             self.existing_data = pd.DataFrame()
             self.logger.logger_info.debug("No matching file found for today; initialized empty DataFrame.")
 
-
+    def close_logger(self):
+        if self.logger:
+            self.logger.close()
+            
     async def validate_websocket_url(self, url, timeout=10):
         try:
             async with aiohttp.ClientSession() as session:
@@ -180,9 +186,8 @@ class ViatorScraper:
         await self.connect_browser()
 
         try:
-            # Loop through each URL
-            for item in self.urls_to_scrape:
-                await self.process_url(item)
+            # Go through each URL defined
+            await self.process_url()
 
             self.logger.logger_done.info("Scraping completed successfully.")
 
@@ -190,10 +195,11 @@ class ViatorScraper:
             # Ensure the browser is closed even if an error occurs
             await self.browser.close()
             self.logger.logger_done.info("Browser connection closed.")
+            self.logger.close_logger()
 
-    async def process_url(self, item):
-        url = item['url']
-        viewer = item['viewer']
+    async def process_url(self):
+        url = self.url
+        viewer = self.viewer
         self.logger.logger_info.info(f"Processing URL: {url}, Viewer: {viewer}")
 
         try:
@@ -253,10 +259,9 @@ class ViatorScraper:
             self.logger.logger_err.error(f"Currency element not found or failed to process: {e}")
             await self.log_html_content("Currency_element_not_found")
             await self.take_top_half_screenshot('Currency_element_not_found')
+            raise e
 
     async def collect_data(self, url, viewer):
-        start_time = time.perf_counter()
-        self.logger.logger_statistics.info(f"Start of processing: {date_str} extract hours set to: {self.extract_hours}")
         # Check existing data for this URL
         if not self.existing_data.empty:
             existing_url_data = self.existing_data[self.existing_data['title_url'] == url]
@@ -279,7 +284,8 @@ class ViatorScraper:
         for date in dates_to_collect:
             await self.check_and_reconnect(url)
             date_str = date.strftime("%Y-%m-%d")
-
+            self.logger.logger_statistics.info(f"Start of processing: {date_str} extract hours set to: {self.extract_hours}")
+            start_time = time.perf_counter()
             self.logger.logger_info.info(f"Processing date: {date_str}")
             
 
@@ -333,6 +339,7 @@ class ViatorScraper:
                                              option_of_price, title_of_price, url_of_price, amount_of_adults, data_viewer, 
                                              availability, extraction_date, title_product, language_product, product_city, uid_product)
             else:
+                self.logger.logger_info.info('Scraping tour date simple')
                 await self.extract_tour_date_simple(url, viewer, self.num_adults, date_str, prices_adults, date_of_price,
                                                      option_of_price, title_of_price, url_of_price, amount_of_adults, data_viewer, 
                                                      availability, extraction_date, title_product, language_product, product_city, uid_product)
@@ -509,7 +516,8 @@ class ViatorScraper:
         price_overwrite = False
         tour_title_element = await self.page.querySelector(self.css_product_title)
         tour_title = await (await tour_title_element.getProperty('textContent')).jsonValue() if tour_title_element else "Title unavailable"
-        city = url.split('tours')[1].split('/')[0]
+        city = url.split('tours')[1].split('/')[1
+        ]
         uid = url.split('/')[-1]
 
 
@@ -595,7 +603,6 @@ class ViatorScraper:
                                 url_of_price.append(url)
                                 data_viewer.append(viewer)
                                 availability.append(availability_text)
-                                title_product.append(tour_title)
                                 language_product.append(self.language)
                                 title_product.append(tour_title)
                                 city_product.append(city)
@@ -636,7 +643,6 @@ class ViatorScraper:
     async def extract_tour_date_simple(self, url, viewer, num_adults, date_str, prices_adults, date_of_price, option_of_price, title_of_price, url_of_price, 
                                        amount_of_adults, data_viewer, availability, extraction_date,
                                        title_product, language_product, city_product, uid_product):
-        await self.page.waitForSelector(self.css_tours_list, timeout=10000)
         try:
             title_element = await self.page.querySelector(self.css_tour_title)
             title = await (await title_element.getProperty('textContent')).jsonValue() if title_element else "Title unavailable"
@@ -645,14 +651,14 @@ class ViatorScraper:
             price = await (await price_element.getProperty('textContent')).jsonValue() if price_element else "Price unavailable"
             
             option_text = "Option unavailable"
-            city = url.split('tours')[1].split('/')[0]
+            city = url.split('tours')[1].split('/')[1]
             uid = url.split('/')[-1]
             extraction_date.append(self.date_start_str)
             prices_adults.append(price.strip())
             date_of_price.append(date_str)
             option_of_price.append(option_text.strip())
             title_product.append(title.strip())
-            title_of_price.append('N/A')
+            title_of_price.append("Option unavailable")
             amount_of_adults.append(num_adults)
             url_of_price.append(url)
             data_viewer.append(viewer)
@@ -763,19 +769,60 @@ class ViatorScraper:
         except Exception as e:
             self.logger.logger_err.error(f"Failed to log HTML content ({context_info}): {e}")
 
-if __name__ == "__main__":
-    urls_to_scrape = [{'url': 'https://www.viator.com/tours/Venice/Murano-Glass-and-Burano-Lace-Tour-from-Venice/d522-3731MURANO', 'viewer': 'some_viewer'}]
-    # urls_to_scrape = [{'url': 'https://www.viator.com/tours/Venice/Discovering-Venetian-Waterways-by-Gondola/d522-21441P6', 'viewer': 'some_viewer'}]
-    date_start_str = datetime.today().strftime("%Y-%m-%d %H:00:00")
-    # date_start_str = '2024-12-30 12:00:00'
-    timeframe_days_to_collect = 2
-    num_adults = 4
-    language = 'en'
-    extract_hours = True
-    file_manager = FilePathManagerFuturePrice('Viator', 'N/A', num_adults, language)  
-    scraper = ViatorScraper(API_KEY, urls_to_scrape, file_manager, date_start_str=date_start_str, timeframe_days_to_collect=timeframe_days_to_collect, 
-                            num_adults=num_adults, extract_hours=extract_hours)
-    asyncio.run(scraper.scrape())
+def main():
 
- 
- # %%
+    site = 'Viator'
+    file_manager__config_path = FilePathManagerFuturePrice(site, "N/A", "N/A", "N/A")
+    config_reader = ConfigReader(file_manager__config_path.config_file_path)
+    urls = config_reader.get_urls_by_ota(site)
+    all_excel_file_list = set()
+    for item in urls:
+            url = item['url']
+            viewer = item["viewer"]
+            
+            for config in item['configurations']:
+                adults = config['adults']
+                language = config['language']
+                schedules = config['schedules']
+                extract_hours = schedules[0].get('extract_hours')
+
+                frequency, max_days = config_reader.get_highest_order_schedule(schedules)
+                if frequency.lower() == "no schedule for today":
+                    # logger_done.info(f"URL: {url} is not scheduled for today to run")
+                    continue  # Use 'continue' to process other configurations
+                else:
+                    date_start_str = datetime.today().strftime("%Y-%m-%d %H:00:00")
+                    # date_start_str = '2024-12-30 12:00:00'
+                    file_manager = FilePathManagerFuturePrice(site, 'N/A', adults, language)  
+                    all_excel_file_list.add((file_manager.output_file_path, file_manager.blob_name))
+                    print(f"Running script for URL: {url}, Adults: {adults}, Language: {language}, Frequency: {frequency}, Max Days: {max_days}")
+                    scraper = ViatorScraper(API_KEY, url, viewer, file_manager, date_start_str=date_start_str, timeframe_days_to_collect=max_days, 
+                                            num_adults=adults,extract_hours=extract_hours)
+                    asyncio.run(scraper.scrape())
+
+                # Handle multiple times per day if applicable
+                # config_reader_instance = config_reader  # Reference to ConfigReader instance
+                # config_schedules = config.get('schedules', [])
+                # for schedule in config_schedules:
+                #     if schedule.get('frequency_type', '').lower() in ["twice_a_day", "three_times_a_day"]:
+                #         times_per_day = schedule.get('times_per_day', 1)
+                #         for time in range(times_per_day):
+                #             # Implement logic for multiple runs per day
+                #             # For example, trigger additional data collection
+                #             print(f"Running additional collection for URL: {url}, Adults: {adults}, Language: {language}, Frequency: {schedule['frequency_type']}, Run number: {time+1}")
+    ####
+
+    azure_storage_upload = AzureBlobUploader(file_manager, LoggerManagerFuturePrice(file_manager,'future_price'))
+    for files_to_upload in all_excel_file_list:
+        future_price_file_path = files_to_upload[0]
+        future_price_blob_name = files_to_upload[1]
+        azure_storage_upload.upload_excel_to_azure_storage_account(future_price_file_path, future_price_blob_name)
+        azure_storage_upload.transform_upload_to_refined_future_price(future_price_file_path, future_price_blob_name)
+
+if __name__ == "__main__":
+    main()
+     # %%
+
+
+
+# 
