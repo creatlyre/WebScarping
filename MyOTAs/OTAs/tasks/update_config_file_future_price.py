@@ -27,7 +27,7 @@ def main():
 
 
     # Process the CSV file
-    config_reader.process_csv(csv_file, config_reader)
+    config_reader.process_csv(csv_file)
 
 if __name__ == "__main__":
     main()

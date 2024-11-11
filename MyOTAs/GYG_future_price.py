@@ -29,6 +29,9 @@ import argparse
 import sys
 import glob
 from selenium.webdriver.support.ui import Select
+from OTAs.file_management.config_manager_future_price import ConfigReader
+from OTAs.file_management.file_path_manager_future_price import FilePathManagerFuturePrice
+
 
 import calendar
 import json
@@ -381,7 +384,7 @@ def check_if_current_day_done_or_partly_done(url_city_id, url_unique_identifier)
         # If the file does not exist or 'date' column is not found, return False and None
     return False, None
 
-def check_if_today_done_on_schedule_in_csv(url, schedule):
+def check_if_today_done_on_schedule_in_csv(url):
 
     url_unique_identifier = url.split('.com/')[-1].split('-')[-1].replace('/', '')
     url_city_id = url.split('.com/')[-1].split('/')[0]
@@ -937,32 +940,34 @@ def get_highest_order_schedule(schedules):
 # %%
 constant_file_path()
 
-with open(link_file_path) as f:
-    config = json.load(f)
+site = 'GYG'
+file_manager__config_path = FilePathManagerFuturePrice(site, "N/A", "N/A", "N/A")
+config_reader = ConfigReader(file_manager__config_path.config_file_path)
+urls = config_reader.get_urls_by_ota(site)
 
 define_logging()
 driver = initilize_driver()
 combinations = set()
-for site in config['urls']:
-    url = site['url']
-    viewer = site["viewer"]
-    for config in site['configurations']:
+for item in urls:
+    url = item['url']
+    viewer = item["viewer"]
+    for config in item['configurations']:
         adults = config['adults']
         language = config['language']
         schedules = config['schedules']
         
-        schedule, max_days = get_highest_order_schedule(schedules)
-        if schedule.lower() == "no schedule for today":
-            logger_done.info(f"URL: {url} is not scheduled for today to run")
-            break
+        frequency, max_days = config_reader.get_highest_order_schedule(schedules)
+        if frequency.lower() == "no schedule for today":
+            # logger_done.info(f"URL: {url} is not scheduled for today to run")
+            continue  # Use 'continue' to process other configurations
        #Check if current day was done and its in Archive folder
         configure_dates_and_file_names(adults, language)
-        today_file_in_arhcive = check_if_today_done_on_schedule_in_csv(url=url, schedule=schedule)
+        today_file_in_arhcive = check_if_today_done_on_schedule_in_csv(url=url)
         if today_file_in_arhcive:
             logger_done.info(f"File in archive for URL: {url}, Adults: {adults}, Language: {language} ")
             
         else:
-            logger_done.info(f"Running script for URL: {url}, Adults: {adults}, Language: {language}, Max Days: {max_days}")
+            logger_done.info(f"Running script for URL: {url}, Adults: {adults}, Language: {language}, Frequency: {frequency}, Max Days: {max_days}")
             get_future_price(driver=driver, adults_amount=adults ,language=language, max_days_to_complete=max_days, url=url, viewer=viewer)
             # Store the combination for later processing
         combinations.add((adults, language))
@@ -974,6 +979,7 @@ for adults, language in combinations:
     process_csv_files(output_gyg, adults, language)
     upload_excel_to_azure_storage_account(output_file_path, storage_account_name, storage_account_key, container_name_raw, blob_name)
     transform_upload_to_refined(output_file_path, storage_account_name, storage_account_key, container_name_refined, blob_name)
+# %%
 
 # %%
 #### DEBUG RUN FOR CHECKING DAYS WHEN PRODUCT WILL BE DONE
@@ -1038,6 +1044,7 @@ for adults, language in combinations:
 
 
 # %%
+
 
 
 

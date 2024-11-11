@@ -1,7 +1,7 @@
 import pandas as pd
 import os
 from azure.storage.blob import BlobServiceClient
-
+import numpy as np
 
 class AzureBlobUploader:
     def __init__(self, file_manager, logger):
@@ -152,7 +152,11 @@ class AzureBlobUploader:
             # Write the transformed data to a new Excel file
             df = pd.read_excel(future_price_file_path)
             # city replacment if there are incorrect in url
-            
+            fill_values = {
+                'tour_option': 'Option unavailable',
+                'time_range': 'Option unavailable',
+                'price_per_person': 'Price unavailable'
+            }
             # Make changes to the df DataFrame as needed
             df['extraction_date'] = df['extraction_date'].astype('str')
             df['date'] = df['date'].astype('str')
@@ -162,6 +166,8 @@ class AzureBlobUploader:
             df['total_price'] = df.apply(lambda row: float(row['price_per_person']) * int(row['adutls']) if row['availability'] != False else "Price unavailable", axis=1)
 
             df['total_price'] = df['total_price'].astype('str')
+            # Fill empty or NaN cells
+            df = df.replace('', np.nan).fillna(fill_values)
             
             # Save modified DataFrame to an Excel file temporarily
             df.to_excel(output_file_path, index=False)

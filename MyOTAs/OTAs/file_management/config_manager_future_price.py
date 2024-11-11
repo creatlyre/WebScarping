@@ -364,18 +364,18 @@ class ConfigReader:
         return None
     
     
-    def process_csv(self, csv_file, config_reader):
+    def process_csv(self, csv_file):
         """
         Process the CSV file to add, remove, or update configurations.
         """
         df = pd.read_csv(csv_file)
-
+        df['URL'] = df['URL'].map(lambda x: x.split('?ranking_uuid')[0] if '?ranking_uuid' in x else x)
         # Iterate over each row where Done is False
         for index, row in df[df['Done'] == False].iterrows():
             action = row['Action'].strip().lower()
-            done_flag = row['Done']
             ota = row['OTA'].strip()
             url = row['URL'].strip()
+            url = url.split('?ranking_uuid')[0] if '?ranking_uuid' in url else url
             viewer = row['Viewer'].strip()
             adults = row['Adults'] if not pd.isna(row['Adults']) else None
             language = row['Language'].strip() if not pd.isna(row['Language']) else None
@@ -387,8 +387,7 @@ class ConfigReader:
             days_in_future = int(row['Days_In_Future']) if not pd.isna(row['Days_In_Future']) else None
             run_day = row['Run_Day'].strip().lower() if not pd.isna(row['Run_Day']) else None
             extract_hours = row['Extract_Hours'] if 'Extract_Hours' in row and not pd.isna(row['Extract_Hours']) else False
-
-
+            
             # Prepare the configuration dictionary
             config = {}
             if adults is not None:
@@ -410,22 +409,18 @@ class ConfigReader:
                     schedule['times_per_day'] = times_per_day
                 if frequency_type == 'every_other_week':
                     schedule['run_day'] = run_day
-                
+
                 schedule['extract_hours'] = bool(extract_hours) if extract_hours is not None else False
                 config['schedules'] = [schedule]
 
-            # Handle multiple schedules by checking for multiple rows with the same OTA and URL
-            # This example assumes each row corresponds to one schedule. To aggregate multiple schedules, additional logic is needed.
-
             if action == 'add':
                 # Check if URL already exists
-                existing_entry = config_reader.get_url_entry(ota, url)
+                existing_entry = self.get_url_entry(ota, url)
                 if existing_entry:
                     print(f"URL '{url}' already exists under OTA '{ota}'. Skipping Add action.")
                 else:
                     # Aggregate all schedules for this OTA and URL
                     schedules = []
-                    # Find all rows with the same OTA and URL and Action=Add and Done=False
                     related_rows = df[
                         (df['Action'].str.lower() == 'add') &
                         (df['OTA'].str.strip() == ota) &
@@ -457,7 +452,7 @@ class ConfigReader:
                         'schedules': schedules
                     }]
                     # Add the URL
-                    config_reader.add_url(ota=ota, url=url, viewer=viewer, configurations=configurations)
+                    self.add_url(ota=ota, url=url, viewer=viewer, configurations=configurations)
                     # Mark all related rows as Done
                     df.loc[
                         (df['Action'].str.lower() == 'add') &
@@ -468,13 +463,13 @@ class ConfigReader:
                     ] = True
 
             elif action == 'remove':
-                config_reader.remove_url(ota, url)
+                self.remove_url(ota, url)
                 # Mark the row as Done
                 df.at[index, 'Done'] = True
 
             elif action == 'update':
                 # Find the existing URL entry
-                existing_entry = config_reader.get_url_entry(ota, url)
+                existing_entry = self.get_url_entry(ota, url)
                 if not existing_entry:
                     print(f"URL '{url}' does not exist under OTA '{ota}'. Cannot perform Update action.")
                     continue
@@ -511,7 +506,7 @@ class ConfigReader:
                     'schedules': schedules
                 }]
                 # Update the URL
-                config_reader.update_url(ota=ota, url=url, viewer=viewer, configurations=configurations)
+                self.update_url(ota=ota, url=url, viewer=viewer, configurations=configurations)
                 # Mark all related rows as Done
                 df.loc[
                     (df['Action'].str.lower() == 'update') &
@@ -525,7 +520,7 @@ class ConfigReader:
                 print(f"Unknown action '{row['Action']}' at row {index + 2}. Skipping.")
 
         # Save the updated configuration
-        config_reader.save_config()
+        self.save_config()
 
         # Save the updated CSV file with Done flags updated
         df.to_csv(csv_file, index=False)
