@@ -816,7 +816,7 @@ def main():
     for files_to_upload in all_excel_file_list:
         future_price_file_path = files_to_upload[0]
         future_price_blob_name = files_to_upload[1]
-        azure_storage_upload.upload_excel_to_azure_storage_account(future_price_file_path, future_price_blob_name)
+        azure_storage_upload.upload_excel_to_azure_storage_account_future_price(future_price_file_path, future_price_blob_name)
         azure_storage_upload.transform_upload_to_refined_future_price(future_price_file_path, future_price_blob_name)
 
 if __name__ == "__main__":

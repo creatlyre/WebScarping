@@ -122,7 +122,7 @@ class AzureBlobUploader:
                 os.remove(output_file_path)
 
 
-    def upload_excel_to_azure_storage_account(self, future_price_file_path, future_price_blob_name):
+    def upload_excel_to_azure_storage_account_future_price(self, future_price_file_path, future_price_blob_name):
         """
         Uploads the Excel file to Azure Blob Storage under the "raw" container.
         """
