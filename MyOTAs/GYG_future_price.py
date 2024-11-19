@@ -347,41 +347,55 @@ def activity_not_availabke_in_selected_language():
 
 # %%
 def check_if_current_day_done_or_partly_done(url_city_id, url_unique_identifier):
-
-    # Check if the CSV file exisint in the latest file in folder future_price if so get the max days to complete
-
+    """
+    Check if the current day's task is done or partly done by searching for matching files,
+    and find the maximum date for the given UID if found in multiple files.
+    """
     # Extract the date part and the fixed part from the extraction_date_save_format
-    date_part = extraction_date_save_format.split('_')[0] # --> 2024-05-27
-    fixed_part = extraction_date_save_format.split('_', 2)[2] # --> en_2 (language_adults)
-    # Define the file pattern with wildcards for the hour and minute components
+    date_part = extraction_date_save_format.split('_')[0]  # e.g., '2024-05-27'
+    fixed_part = extraction_date_save_format.split('_', 2)[2]  # e.g., 'en_2' (language_adults)
+
+    # Define file patterns for current folder and archive folder
     file_pattern = f'{output_gyg}/{date_part}_*-*-*_{fixed_part}-{url_city_id}-GYG.csv'
     file_pattern_archive = f'{archive_folder}/{date_part}_*-*-*_{fixed_part}-{url_city_id}-GYG.csv'
-    logger_info.info(f'File_pattern: {file_pattern}')
 
-    
+    logger_info.info(f'File patterns: {file_pattern}, {file_pattern_archive}')
+
     # Use glob to find all matching files
-    matching_files = glob.glob(file_pattern)
-    matching_files_archive = glob.glob(file_pattern_archive)
-    logger_info.info(f'matching_files: {matching_files}')
+    matching_files = glob.glob(file_pattern) + glob.glob(file_pattern_archive)
+    logger_info.info(f'Matching files: {matching_files}')
+
+    if not matching_files:
+        # No files found
+        return False, None
+
+    # Load all files into a single DataFrame
+    combined_df = pd.DataFrame()
     for file_path in matching_files:
-        # Check if the file exists
         if os.path.exists(file_path):
-            # Read the CSV file into a DataFrame
-            df = pd.read_csv(file_path)
-            df = df[df['uid'] == url_unique_identifier]
-            if len(df) == 0:
-                return False, None
-            # Assuming 'date' is the name of the column containing the dates
-            if 'date' in df.columns:
-                # Convert the 'date' column to datetime format
-                df['date'] = pd.to_datetime(df['date'])
-                
-                # Find the maximum date
-                max_date = df['date'].max()
-                
-                # Returning True to indicate the task is already processed, and the max date
-                return True, max_date.date()  # Converting datetime to date for easier comparison
-        # If the file does not exist or 'date' column is not found, return False and None
+            temp_df = pd.read_csv(file_path)
+            combined_df = pd.concat([combined_df, temp_df], ignore_index=True)
+
+    if combined_df.empty:
+        # No data in the combined DataFrame
+        return False, None
+
+    # Filter by the UID
+    filtered_df = combined_df[combined_df['uid'] == url_unique_identifier]
+
+    if filtered_df.empty:
+        # UID not found in any file
+        return False, None
+
+    # Ensure 'date' column exists and convert to datetime
+    if 'date' in filtered_df.columns:
+        filtered_df['date'] = pd.to_datetime(filtered_df['date'], errors='coerce')
+        # Find the maximum date
+        max_date = filtered_df['date'].max()
+        if pd.notnull(max_date):
+            return True, max_date.date()  # Return as a date object for consistency
+
+    # If no valid date is found, return False
     return False, None
 
 def check_if_today_done_on_schedule_in_csv(url):
