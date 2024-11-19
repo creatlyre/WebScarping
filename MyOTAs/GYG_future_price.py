@@ -269,7 +269,7 @@ def change_currency(driver):
         except Exception as e:
             logger_err.error(f"Failed to select currency '{desired_currency_text}': {e}")
     else:
-        logger_info.info(f"Currency already set to {desired_currency_text} for city '{city}'.")
+        logger_info.info(f"Currency already set to {desired_currency_text} for city'.")
 
 def save_and_erase_dataframe(df: pd.DataFrame, url_city_id, url_unique_identifier) -> pd.DataFrame:
     ## SAVE

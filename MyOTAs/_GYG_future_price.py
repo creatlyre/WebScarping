@@ -32,6 +32,7 @@ from azure.storage.blob import BlobServiceClient
 # Import ConfigReader and FilePathManagerFuturePrice classes
 from OTAs.file_management.config_manager_future_price import ConfigReader
 from OTAs.file_management.file_path_manager_future_price import FilePathManagerFuturePrice
+from OTAs.logger.logger_manager_future_price import LoggerManagerFuturePrice
 
 # Constants - Replace with your actual paths and credentials
 SITE = 'GYG'
@@ -67,66 +68,12 @@ class Config:
         self.archive_folder = os.path.join(self.output_gyg, 'Archive')
 
 
-
-def define_logging(logs_path):
-    """
-    Set up logging configurations.
-    """
-    global logger_err, logger_info, logger_done, logger_statistics
-    # Create logger objects
-    logger_err = logging.getLogger('Error_logger')
-    logger_err.setLevel(logging.DEBUG)
-    logger_info = logging.getLogger('Info_logger')
-    logger_info.setLevel(logging.DEBUG)
-    logger_done = logging.getLogger('Done_logger')
-    logger_done.setLevel(logging.DEBUG)
-    logger_statistics = logging.getLogger('Statistics_logger')
-    logger_statistics.setLevel(logging.DEBUG)
-
-    # Create console handler and set level to debug
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)
-
-    # Create file handlers
-    fh_error = logging.FileHandler(os.path.join(logs_path, 'error_logs.log'))
-    fh_error.setLevel(logging.DEBUG)
-
-    fh_info = logging.FileHandler(os.path.join(logs_path, 'info_logs.log'))
-    fh_info.setLevel(logging.INFO)
-
-    fh_done = logging.FileHandler(os.path.join(logs_path, 'done_logs.log'))
-    fh_done.setLevel(logging.INFO)
-
-    fh_statistics = logging.FileHandler(os.path.join(logs_path, 'statistics_logs.log'))
-    fh_statistics.setLevel(logging.INFO)
-
-    # Create formatter
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
-    # Add formatter to handlers
-    ch.setFormatter(formatter)
-    fh_error.setFormatter(formatter)
-    fh_info.setFormatter(formatter)
-    fh_done.setFormatter(formatter)
-    fh_statistics.setFormatter(formatter)
-
-    # Add handlers to loggers
-    logger_err.addHandler(ch)
-    logger_err.addHandler(fh_error)
-    logger_info.addHandler(ch)
-    logger_info.addHandler(fh_info)
-    logger_done.addHandler(ch)
-    logger_done.addHandler(fh_done)
-    logger_statistics.addHandler(ch)
-    logger_statistics.addHandler(fh_statistics)
-
-
 def initilize_driver():
     """
     Initialize the Selenium WebDriver.
     """
     try:
-        logger_info.info("Initializing the Chrome driver.")
+        logger.logger_info.info("Initializing the Chrome driver.")
         # Setting up Chrome options
         options = webdriver.ChromeOptions()
         options.add_argument('--blink-settings=imagesEnabled=false')
@@ -136,11 +83,11 @@ def initilize_driver():
         # Initialize the Chrome driver
         driver = webdriver.Chrome(options=options)
         driver.maximize_window()
-        logger_done.info("Chrome driver initialized successfully.")
+        logger.logger_done.info("Chrome driver initialized successfully.")
         return driver
 
     except Exception as e:
-        logger_err.error(f"An error occurred during driver initialization: {e}")
+        logger.logger_err.error(f"An error occurred during driver initialization: {e}")
         raise
 
 
@@ -150,9 +97,9 @@ def quit_driver(driver):
     """
     try:
         driver.quit()
-        logger_done.info("Chrome driver quit successfully.")
+        logger.logger_done.info("Chrome driver quit successfully.")
     except Exception as e:
-        logger_err.error(f"An error occurred while quitting the driver: {e}")
+        logger.logger_err.error(f"An error occurred while quitting the driver: {e}")
 
 
 def save_and_erase_dataframe(df, url_city_id, url_unique_identifier, config):
@@ -164,10 +111,10 @@ def save_and_erase_dataframe(df, url_city_id, url_unique_identifier, config):
         df['city'] = url_city_id.split('-')[0]
         df['uid'] = url_unique_identifier
         df.to_csv(file_path, header=not os.path.exists(file_path), index=False, mode='a')
-        logger_done.info(f'Successfully saved {len(df)} rows to {file_path}')
+        logger.logger_done.info(f'Successfully saved {len(df)} rows to {file_path}')
         return pd.DataFrame()
     except Exception as e:
-        logger_err.error(f"An error occurred while saving DataFrame: {e}")
+        logger.logger_err.error(f"An error occurred while saving DataFrame: {e}")
         raise
 
 
@@ -194,7 +141,7 @@ def extract_options(driver, option_details, activity_title, language, adults_amo
                         option_price_total = option.find_element(By.CLASS_NAME, 'activity-option-cart-message-wrapper').text
                     option_price_per_person = 'Not Available'
             except Exception as e:
-                logger_err.info(f"Error parsing price: {e}")
+                logger.logger_err.info(f"Error parsing price: {e}")
                 option_price_total = 'Not Available'
                 option_price_per_person = 'Not Available'
 
@@ -214,10 +161,10 @@ def extract_options(driver, option_details, activity_title, language, adults_amo
                 'title_url': url,
                 'viewer': viewer
             })
-            logger_info.info(f'Extracted option: {option_title}')
+            logger.logger_info.info(f'Extracted option: {option_title}')
         return list_of_items
     except Exception as e:
-        logger_err.error(f"An error occurred in extract_options for URL {url} on date {option_date}: {e}")
+        logger.logger_err.error(f"An error occurred in extract_options for URL {url} on date {option_date}: {e}")
         raise
 
 
@@ -242,7 +189,7 @@ def process_days_not_available(activity_title, language, adults_amount, option_d
         }]
         return list_of_items
     except Exception as e:
-        logger_err.error(f"An error occurred in process_days_not_available for URL {url} on date {option_date}: {e}")
+        logger.logger_err.error(f"An error occurred in process_days_not_available for URL {url} on date {option_date}: {e}")
         raise
 
 
@@ -251,7 +198,7 @@ def get_future_price(driver, url, viewer, language, adults_amount, max_days_to_c
     Main function to get future prices from the website.
     """
     try:
-        logger_info.info(f"Starting price extraction for URL: {url}")
+        logger.logger_info.info(f"Starting price extraction for URL: {url}")
         start_time_one_link = time.time()
 
         url_id = url
@@ -278,16 +225,16 @@ def get_future_price(driver, url, viewer, language, adults_amount, max_days_to_c
         current_year = current_date.year
 
         driver.get(full_url)
-        logger_info.info(f'Navigated to URL: {full_url} UNIQUE ID: {url_unique_identifier}')
-        logger_info.info(f'Months to complete: {month_to_complete} Picked Max Date {picked_max_date}')
+        logger.logger_info.info(f'Navigated to URL: {full_url} UNIQUE ID: {url_unique_identifier}')
+        logger.logger_info.info(f'Months to complete: {month_to_complete} Picked Max Date {picked_max_date}')
 
         is_done, max_date_done = check_if_current_day_done_or_partly_done(url_city_id, url_unique_identifier, config)
         if is_done:
             if max_date_done >= picked_max_date_obj.date():
-                logger_done.info(f'URL was already processed today up to date: {max_date_done}')
+                logger.logger_done.info(f'URL was already processed today up to date: {max_date_done}')
                 return
             else:
-                logger_info.info(f'Continuing from last processed date: {max_date_done}')
+                logger.logger_info.info(f'Continuing from last processed date: {max_date_done}')
                 full_url = full_url.replace(start_collection_date, max_date_done.strftime('%Y-%m-%d'))
                 driver.get(full_url)
 
@@ -296,7 +243,7 @@ def get_future_price(driver, url, viewer, language, adults_amount, max_days_to_c
 
         activity_title = get_activity_title(driver, url)
         if not activity_title:
-            logger_err.error("Activity title not found. Skipping URL.")
+            logger.logger_err.error("Activity title not found. Skipping URL.")
             return
 
         booking_tile = WebDriverWait(driver, 60).until(EC.visibility_of_element_located((By.CSS_SELECTOR, "div[data-track='booking-assistant']")))
@@ -317,7 +264,7 @@ def get_future_price(driver, url, viewer, language, adults_amount, max_days_to_c
                     continue
                 for day in days_available:
                     if day.text == "" or len(day.text) == 0:
-                        logger_info.info("Day was empty")
+                        logger.logger_info.info("Day was empty")
                         continue
                     ActionChains(driver).move_to_element(day).perform()
                     day.click()
@@ -327,7 +274,7 @@ def get_future_price(driver, url, viewer, language, adults_amount, max_days_to_c
                 if not empty:
                     break
         except TimeoutException:
-            logger_info.info('Current date is available.')
+            logger.logger_info.info('Current date is available.')
             pass
 
         # After clicking, wait for options to show up
@@ -336,7 +283,7 @@ def get_future_price(driver, url, viewer, language, adults_amount, max_days_to_c
         list_of_items = extract_options(driver, option_details, activity_title, language, adults_amount, url_id, viewer, config.extraction_date)
         df = pd.DataFrame(list_of_items)
         save_date_to_file = driver.current_url.split('date_from=')[-1].split('&')[0]
-        logger_done.info(f'Saving date: {save_date_to_file} to file')
+        logger.logger_done.info(f'Saving date: {save_date_to_file} to file')
         df = save_and_erase_dataframe(df, url_city_id, url_unique_identifier, config)
 
         # Click on calendar picker to select dates
@@ -377,7 +324,7 @@ def get_future_price(driver, url, viewer, language, adults_amount, max_days_to_c
             for day_na in days_not_available:
                 list_of_items = process_days_not_available(activity_title, language, adults_amount, day_na, url_id, viewer, config.extraction_date)
                 df = pd.DataFrame(list_of_items)
-                logger_done.info(f'Saving date: {day_na} to file: not available date')
+                logger.logger_done.info(f'Saving date: {day_na} to file: not available date')
                 df = save_and_erase_dataframe(df, url_city_id, url_unique_identifier, config)
 
             # Iterate through days to complete
@@ -391,30 +338,31 @@ def get_future_price(driver, url, viewer, language, adults_amount, max_days_to_c
                     day_element = month.find_element(By.CSS_SELECTOR, f"span[aria-label*='{day}']")
                     day_element.click()
                 except Exception as e:
-                    logger_err.error(f"An error occurred while selecting day {day} for url {url}: {e}")
+                    logger.logger_err.error(f"An error occurred while selecting day {day} for url {url}: {e}")
                     continue
 
                 WebDriverWait(driver, 60).until(EC.visibility_of_element_located((By.TAG_NAME, 'details')))
                 option_details = driver.find_elements(By.TAG_NAME, 'details')
-                time.sleep(2)
+                time.sleep(1
+                )
                 list_of_items = extract_options(driver, option_details, activity_title, language, adults_amount, url_id, viewer, config.extraction_date)
                 df = pd.DataFrame(list_of_items)
                 save_date_to_file = driver.current_url.split('date_from=')[-1].split('&')[0]
-                logger_done.info(f'Saving date: {save_date_to_file} to file')
+                logger.logger_done.info(f'Saving date: {save_date_to_file} to file')
                 df = save_and_erase_dataframe(df, url_city_id, url_unique_identifier, config)
                 check_for_modal_window_to_close(driver, calendar_picker)
 
             # Navigate to next month
             next_month_button = driver.find_element(By.CSS_SELECTOR, "span[class='flatpickr-next-month']")
             next_month_button.click()
-            time.sleep(1)
+            time.sleep(0.5)
 
         end_time_one_link = time.time()
-        logger_statistics.info(f"Time required for {max_days_to_complete} days: {(end_time_one_link - start_time_one_link):.2f} seconds")
+        logger.logger_statistics.info(f"Time required for {max_days_to_complete} days: {(end_time_one_link - start_time_one_link):.2f} seconds")
 
     except Exception as e:
-        logger_err.error(f"An error occurred in get_future_price for URL {url}: {e}")
-        logger_err.error(traceback.format_exc())
+        logger.logger_err.error(f"An error occurred in get_future_price for URL {url}: {e}")
+        logger.logger_err.error(traceback.format_exc())
 
 def get_days_not_available(date_today_obj, picked_max_date_obj, current_year, current_month, days_not_available_elements):
     days_not_available = []
@@ -442,7 +390,7 @@ def check_for_modal_window_to_close(driver, calendar_picker):
         driver.execute_script("arguments[0].scrollIntoView(true);", calendar_picker)
         calendar_picker.click()
     except Exception as e:
-        logger_err.error(f"An error occurred in check_for_modal_window_to_close: {e}")
+        logger.logger_err.error(f"An error occurred in check_for_modal_window_to_close: {e}")
 
 
 def change_currency(driver, url):
@@ -462,17 +410,17 @@ def change_currency(driver, url):
         select = Select(currency_selector)
         selected_option = select.first_selected_option
         current_currency = selected_option.text.strip()
-        logger_info.info(f"Current currency: {current_currency}")
+        logger.logger_info.info(f"Current currency: {current_currency}")
 
         if "EUR" not in current_currency:
             desired_currency_text = 'Euro (€)'
             select.select_by_visible_text(desired_currency_text)
-            logger_info.info(f"Currency changed to {desired_currency_text}")
+            logger.logger_info.info(f"Currency changed to {desired_currency_text}")
             time.sleep(2)
         else:
-            logger_info.info("Currency is already set to Euro.")
+            logger.logger_info.info("Currency is already set to Euro.")
     except Exception as e:
-        logger_err.error(f"Failed to change currency for URL {url}: {e}")
+        logger.logger_err.error(f"Failed to change currency for URL {url}: {e}")
 
 
 def check_and_click_only_essential(driver, url):
@@ -488,15 +436,15 @@ def check_and_click_only_essential(driver, url):
         only_essential_button = driver.find_element(By.ID, "onetrust-reject-all-handler")
         if only_essential_button:
             only_essential_button.click()
-            logger_info.info("Clicked 'Only Essential' on cookie consent.")
+            logger.logger_info.info("Clicked 'Only Essential' on cookie consent.")
     except TimeoutException:
         # Log if the popup is not found within the wait period
-        logger_info.info("Cookie consent popup not found.")
+        logger.logger_info.info("Cookie consent popup not found.")
     except NoSuchElementException:
         # Log as information if the button is not found
-        logger_info.info("The 'Only Essential' button was not found.")
+        logger.logger_info.info("The 'Only Essential' button was not found.")
     except Exception as e:
-            logger_err.error(f"An unexpected error occurred while handling cookie consent for URL {url}: {e}")
+            logger.logger_err.error(f"An unexpected error occurred while handling cookie consent for URL {url}: {e}")
 
 
 
@@ -506,13 +454,13 @@ def get_activity_title(driver, url):
     """
     try:
         activity_title = driver.find_element(By.CSS_SELECTOR, "h1[data-track='activity-title']").text
-        logger_info.info(f"Activity title: {activity_title}")
+        logger.logger_info.info(f"Activity title: {activity_title}")
         return activity_title
     except NoSuchElementException:
-        logger_err.error(f"Activity title element not found for URL {url}.")
+        logger.logger_err.error(f"Activity title element not found for URL {url}.")
         return None
     except Exception as e:
-        logger_err.error(f"An error occurred while getting activity title for URL {url}: {e}")
+        logger.logger_err.error(f"An error occurred while getting activity title for URL {url}: {e}")
         return None
 
 
@@ -527,7 +475,7 @@ def check_if_current_day_done_or_partly_done(url_city_id, url_unique_identifier,
         file_pattern_archive = os.path.join(config.archive_folder, f'{date_part}_*-*-*_{fixed_part}-{url_city_id}-GYG.csv')
 
         matching_files = glob.glob(file_pattern) + glob.glob(file_pattern_archive)
-        logger_info.info(f'Found {len(matching_files)} matching files.')
+        logger.logger_info.info(f'Found {len(matching_files)} matching files.')
 
         if not matching_files:
             return False, None
@@ -545,7 +493,7 @@ def check_if_current_day_done_or_partly_done(url_city_id, url_unique_identifier,
                 return True, max_date.date()
         return False, None
     except Exception as e:
-        logger_err.error(f"An error occurred while checking processed data: {e}")
+        logger.logger_err.error(f"An error occurred while checking processed data: {e}")
         return False, None
 
 
@@ -556,7 +504,7 @@ def process_csv_files(folder_path, adults, language, config):
     try:
         output_file_path = config.output_file_path
         if os.path.exists(output_file_path):
-            logger_info.info("Output file already exists. Skipping processing.")
+            logger.logger_info.info("Output file already exists. Skipping processing.")
             return
 
         archive_path = config.archive_folder
@@ -569,12 +517,12 @@ def process_csv_files(folder_path, adults, language, config):
                 df = pd.read_csv(file_path)
                 combined_df = pd.concat([combined_df, df], ignore_index=True)
                 shutil.move(file_path, os.path.join(archive_path, filename))
-                logger_info.info(f"Processed and archived file: {filename}")
+                logger.logger_info.info(f"Processed and archived file: {filename}")
 
         combined_df.to_excel(output_file_path, index=False)
-        logger_done.info(f"Combined data saved to {output_file_path}.")
+        logger.logger_done.info(f"Combined data saved to {output_file_path}.")
     except Exception as e:
-        logger_err.error(f"An error occurred while processing CSV files: {e}")
+        logger.logger_err.error(f"An error occurred while processing CSV files: {e}")
         raise
 
 
@@ -583,16 +531,16 @@ def upload_excel_to_azure_storage_account(local_file_path, storage_account_name,
     Upload the Excel file to Azure Blob Storage (raw container).
     """
     try:
-        logger_info.info("Uploading file to Azure Blob Storage (raw).")
+        logger.logger_info.info("Uploading file to Azure Blob Storage (raw).")
         connection_string = f"DefaultEndpointsProtocol=https;AccountName={storage_account_name};AccountKey={storage_account_key};EndpointSuffix=core.windows.net"
         blob_service_client = BlobServiceClient.from_connection_string(connection_string)
         container_client = blob_service_client.get_container_client(container_name_raw)
 
         with open(local_file_path, "rb") as file:
             container_client.upload_blob(name=blob_name, data=file, overwrite=True)
-        logger_done.info("File uploaded successfully to Azure Blob Storage (raw).")
+        logger.logger_done.info("File uploaded successfully to Azure Blob Storage (raw).")
     except Exception as e:
-        logger_err.error(f"An error occurred while uploading to Azure Blob Storage: {e}")
+        logger.logger_err.error(f"An error occurred while uploading to Azure Blob Storage: {e}")
         raise
 
 
@@ -601,7 +549,7 @@ def transform_upload_to_refined(local_file_path, storage_account_name, storage_a
     Transform the data and upload to Azure Blob Storage (refined container).
     """
     try:
-        logger_info.info("Transforming data and uploading to Azure Blob Storage (refined).")
+        logger.logger_info.info("Transforming data and uploading to Azure Blob Storage (refined).")
         connection_string = f"DefaultEndpointsProtocol=https;AccountName={storage_account_name};AccountKey={storage_account_key};EndpointSuffix=core.windows.net"
         df = pd.read_excel(local_file_path)
 
@@ -622,9 +570,9 @@ def transform_upload_to_refined(local_file_path, storage_account_name, storage_a
         container_client = blob_service_client.get_container_client(container_name_refined)
         with open(output_file_path, "rb") as data:
             container_client.upload_blob(name=blob_name, data=data, overwrite=True)
-        logger_done.info("File uploaded successfully to Azure Blob Storage (refined).")
+        logger.logger_done.info("File uploaded successfully to Azure Blob Storage (refined).")
     except Exception as e:
-        logger_err.error(f"An error occurred: {e}")
+        logger.logger_err.error(f"An error occurred: {e}")
         raise
     finally:
         if os.path.exists(output_file_path):
@@ -641,7 +589,7 @@ def extract_date_from_price(text):
             date_obj = datetime.datetime.strptime(date_part, "%A, %B %d, %Y")
             return date_obj.strftime("%Y-%m-%d")
         except ValueError as e:
-            logger_err.error(f"Date format mismatch: {e}")
+            logger.logger_err.error(f"Date format mismatch: {e}")
             return np.nan
     else:
         return np.nan
@@ -688,7 +636,7 @@ def get_highest_order_schedule(schedules):
                 return freq, value
         return "No schedule for today", None
     except Exception as e:
-        logger_err.error(f"An error occurred while determining schedule: {e}")
+        logger.logger_err.error(f"An error occurred while determining schedule: {e}")
         return "No schedule for today", None
 
 
@@ -719,18 +667,18 @@ def check_if_today_done_on_schedule_in_csv(url, config):
         file_pattern = os.path.join(config.archive_folder, f'{date_part}_*-*-*_{fixed_part}-{url_city_id}-GYG.csv')
 
         matching_files = glob.glob(file_pattern)
-        logger_info.info(f'Checking if today\'s data is already processed for URL: {url}')
+        logger.logger_info.info(f'Checking if today\'s data is already processed for URL: {url}')
 
         for file_path in matching_files:
             if os.path.exists(file_path):
                 df = pd.read_csv(file_path)
                 df = df[df['uid'] == url_unique_identifier]
                 if not df.empty:
-                    logger_info.info("Today's data is already processed.")
+                    logger.logger_info.info("Today's data is already processed.")
                     return True
         return False
     except Exception as e:
-        logger_err.error(f"An error occurred while checking today's data: {e}")
+        logger.logger_err.error(f"An error occurred while checking today's data: {e}")
         return False
 
 
@@ -738,16 +686,15 @@ def main():
     """
     Main execution function.
     """
-    sample_config = Config("N/A", "N/A")
-    define_logging(sample_config.logs_path)
+    # sample_config = Config("N/A", "N/A")
+    # define_logging(sample_config.logs_path)
+    global logger
     try:
         # Initialize file path manager and config reader
         file_manager = FilePathManagerFuturePrice(SITE, "N/A", "N/A", "N/A")
         config_reader = ConfigReader(file_manager.config_file_path)
         urls = config_reader.get_urls_by_ota(SITE)
-
-        # For logging
-        
+        logger = LoggerManagerFuturePrice(file_manager, 'gyg_future_price')
 
         driver = initilize_driver()
         combinations = set()
@@ -761,15 +708,15 @@ def main():
 
                 frequency, max_days = config_reader.get_highest_order_schedule(schedules)
                 if frequency == "No schedule for today":
-                    logger_done.info(f"URL: {url} is not scheduled for today.")
+                    logger.logger_done.info(f"URL: {url} is not scheduled for today.")
                     continue
 
                 config = Config(adults, language)
                 today_file_in_archive = check_if_today_done_on_schedule_in_csv(url, config)
                 if today_file_in_archive:
-                    logger_done.info(f"Data already processed for URL: {url}, Adults: {adults}, Language: {language}")
+                    logger.logger_done.info(f"Data already processed for URL: {url}, Adults: {adults}, Language: {language}")
                 else:
-                    logger_done.info(f"Processing URL: {url}, Adults: {adults}, Language: {language}, Frequency: {frequency}, Max Days: {max_days}")
+                    logger.logger_done.info(f"Processing URL: {url}, Adults: {adults}, Language: {language}, Frequency: {frequency}, Max Days: {max_days}")
                     get_future_price(driver, url, viewer, language, adults, max_days, config)
                     combinations.add((adults, language))
 
@@ -779,11 +726,11 @@ def main():
             process_csv_files(config.output_gyg, adults, language, config)
             upload_excel_to_azure_storage_account(config.output_file_path, STORAGE_ACCOUNT_NAME, STORAGE_ACCOUNT_KEY, CONTAINER_NAME_RAW, config.blob_name)
             transform_upload_to_refined(config.output_file_path, STORAGE_ACCOUNT_NAME, STORAGE_ACCOUNT_KEY, CONTAINER_NAME_REFINED, config.blob_name)
-        logger_done.info("Script execution completed successfully.")
+        logger.logger_done.info("Script execution completed successfully.")
 
     except Exception as e:
-        logger_err.error(f"An error occurred in main execution for URL {url if 'url' in locals() else 'N/A'}: {e}")
-        logger_err.error(traceback.format_exc())
+        logger.logger_err.error(f"An error occurred in main execution for URL {url if 'url' in locals() else 'N/A'}: {e}")
+        logger.logger_err.error(traceback.format_exc())
 
 
 if __name__ == "__main__":
