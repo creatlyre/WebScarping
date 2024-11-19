@@ -481,13 +481,13 @@ def check_if_current_day_done_or_partly_done(url_city_id, url_unique_identifier,
             return False, None
 
         combined_df = pd.concat([pd.read_csv(file) for file in matching_files], ignore_index=True)
-        filtered_df = combined_df[combined_df['uid'] == url_unique_identifier]
+        filtered_df = combined_df[(combined_df['uid'] == url_unique_identifier) & (~combined_df['total_price'].isna())]
 
         if filtered_df.empty:
             return False, None
 
         if 'date' in filtered_df.columns:
-            filtered_df['date'] = pd.to_datetime(filtered_df['date'], errors='coerce')
+            filtered_df['date'] = pd.to_datetime(filtered_df['date'])
             max_date = filtered_df['date'].max()
             if pd.notnull(max_date):
                 return True, max_date.date()
