@@ -129,7 +129,7 @@ def extract_options(driver, option_details, activity_title, language, adults_amo
 
         for option in option_details:
             option_title = option.find_element(By.CLASS_NAME, 'activity-option__title').text
-            option_time_range = option.find_element(By.CLASS_NAME, 'activity-option__start-time-range').text if option.find_elements(By.CLASS_NAME, 'activity-option__start-time-range') else 'Not listed'
+            option_time_range = option.find_element(By.CLASS_NAME, 'activity-option-date starting-times__date starting-times__date--mb-lg').text if option.find_elements(By.CLASS_NAME, 'activity-option-date starting-times__date starting-times__date--mb-lg') else 'Not listed'
             try:
                 try:
                     option_price_total = option.find_element(By.CLASS_NAME, 'activity-option-price-wrapper__price').text

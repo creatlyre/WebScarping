@@ -146,6 +146,7 @@ class AzureBlobUploader:
         """
         Transforms and uploads the Excel file to Azure Blob Storage under the "refined" container.
         """
+        self.logger.logger_info.info(f'Processing file: {future_price_file_path} to refined layer as {future_price_blob_name}')
         output_file_path = "temp_file.xlsx"  # Temporary file for transformation
 
         try:
@@ -154,20 +155,21 @@ class AzureBlobUploader:
             # city replacment if there are incorrect in url
             fill_values = {
                 'tour_option': 'Option unavailable',
-                'time_range': 'Option unavailable',
-                'price_per_person': 'Price unavailable'
+                'time_range': 'Option unavailable'
             }
             # Make changes to the df DataFrame as needed
             df['extraction_date'] = df['extraction_date'].astype('str')
             df['date'] = df['date'].astype('str')
             df['price_per_person'] = df['price_per_person'].astype('str')
-            df['price_per_person'] = df['price_per_person'].map(lambda x: x.split(' ')[-1] if x != 'Price unavailable' else x)
+            df['price_per_person'] = df['price_per_person'].map(lambda x: x.split(' ')[-1] if x != 'Price unavailable' else None)
             df['price_per_person'] = df['price_per_person'].replace(r'[$€£]', '', regex=True).str.replace(',', '').str.strip()
-            df['total_price'] = df.apply(lambda row: float(row['price_per_person']) * int(row['adutls']) if row['availability'] != False else "Price unavailable", axis=1)
+            df['price_per_person'] = pd.to_numeric(df['price_per_person'], errors='coerce')
+            df['total_price'] = df.apply(lambda row: float(row['price_per_person']) * int(row['adults']) if row['availability'] != False else None, axis=1)
 
-            df['total_price'] = df['total_price'].astype('str')
+            # df['price_per_person'] = df['price_per_person'].replace('Price unavailable', None)
+            # df['total_price'] = df['total_price'].replace('Price unavailable', None)
             # Fill empty or NaN cells
-            df = df.replace('', np.nan).fillna(fill_values)
+            df = df.fillna(fill_values)
             
             # Save modified DataFrame to an Excel file temporarily
             df.to_excel(output_file_path, index=False)
@@ -179,8 +181,10 @@ class AzureBlobUploader:
 
             with open(output_file_path, "rb") as data:
                 container_client.upload_blob(name=future_price_blob_name, data=data)
+
+            self.logger.logger_done.info(f"File uploaded successfully to Azure Blob Storage (refined).")
+            self.logger.logger_done.info(f"File: {future_price_file_path} uploaded as: {future_price_blob_name}")
             
-            self.logger.logger_done.info("File uploaded successfully to Azure Blob Storage (refined).")
 
         except Exception as e:
             self.logger.logger_err.error(f"An error occurred while transforming and uploading to refined storage: {e}")

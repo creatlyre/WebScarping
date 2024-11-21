@@ -14,7 +14,9 @@ from logger.logger_manager import LoggerManager
 class LoggerManagerFuturePrice(LoggerManager):
     def __init__(self, file_manager, application="future_price"):
         super().__init__(file_manager, application)
-        
+         # Use the formatter from the base class
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
         current_log_path = self.get_current_log_path()
         self.logger_statistics = logging.getLogger('Statistics_logger')
         self.logger_statistics.setLevel(logging.DEBUG)
@@ -23,6 +25,7 @@ class LoggerManagerFuturePrice(LoggerManager):
 
         self.logger_statistics.addHandler(self.ch)
         self.logger_statistics.addHandler(self.fh_statistics)
+        self.fh_statistics.setFormatter(formatter)
 
     def close_logger(self):
         super().close_logger()

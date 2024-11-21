@@ -21,7 +21,10 @@ class FilePathManagerFuturePrice(FilePathManager):
         self.link_file_path = fr'G:/.shortcut-targets-by-id/1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2/MyOTAs/Baza Excel/Resource/LinksFuturePrice_GYG.json'
         self.config_file_path = fr'G:/.shortcut-targets-by-id/1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2/MyOTAs/Baza Excel/Resource/config.yaml'
         self.future_price_config_update_csv_file = fr'G:/.shortcut-targets-by-id/1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2/MyOTAs/Baza Excel/Resource/future_price_config_update.csv'
-        self.extraction_date = datetime.datetime.now().strftime('%Y-%m-%d %H:00:00')
+        if manual_overdrive_date:
+            self.extraction_date = manual_date
+        else:
+            self.extraction_date = datetime.datetime.now().strftime('%Y-%m-%d %H:00:00')
         self.extraction_date_save_format = f"{self.extraction_date.replace(' ', '_').replace(':','-')}_{self.language}_{self.adults}"
         # Set the path of the local file
         # Azure Storage containers and blob name

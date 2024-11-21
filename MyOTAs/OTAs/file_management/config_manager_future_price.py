@@ -293,7 +293,11 @@ class ConfigReader:
         # Check if URL already exists
         for url_entry in ota_entry['urls']:
             if url_entry['url'] == url:
-                print(f"URL '{url}' already exists under OTA '{ota}'. Skipping Add action.")
+                print(f"URL '{url}' already exists under OTA '{ota}'. Adding configurations.")
+                # Update viewer if needed
+                url_entry['viewer'] = viewer
+                for new_config in configurations:
+                    self.add_or_update_configuration(url_entry, new_config)
                 return
 
         new_url_entry = {
@@ -303,6 +307,7 @@ class ConfigReader:
         }
         ota_entry['urls'].append(new_url_entry)
         print(f"Added new URL '{url}' under OTA '{ota}'.")
+
 
     def save_config(self):
         """
@@ -346,12 +351,59 @@ class ConfigReader:
         for url_entry in ota_entry['urls']:
             if url_entry['url'] == url:
                 url_entry['viewer'] = viewer
-                url_entry['configurations'] = configurations
+                for new_config in configurations:
+                    self.add_or_update_configuration(url_entry, new_config)
                 print(f"Updated URL '{url}' under OTA '{ota}'.")
                 return
 
         print(f"URL '{url}' not found under OTA '{ota}'. Cannot perform Update action.")
+
+
+    def add_or_update_configuration(self, url_entry: Dict[str, Any], new_config: Dict[str, Any]):
+        """
+        Add or update a configuration in a URL entry.
+        If a configuration with the same adults and language exists, merge or update the schedules.
+        If a schedule with the same frequency_type exists, update it with new values.
+        """
+        existing_configs = url_entry.get('configurations', [])
+        for config in existing_configs:
+            if config.get('adults') == new_config.get('adults') and config.get('language') == new_config.get('language'):
+                # Found existing configuration, now merge or update schedules
+                existing_schedules = config.get('schedules', [])
+                new_schedules = new_config.get('schedules', [])
+                for new_schedule in new_schedules:
+                    frequency_type = new_schedule.get('frequency_type')
+                    # Check if a schedule with the same frequency_type exists
+                    existing_schedule = self.get_schedule_by_frequency_type(existing_schedules, frequency_type)
+                    if existing_schedule:
+                        # Update existing schedule with new values
+                        existing_schedule.update(new_schedule)
+                    else:
+                        # Add new schedule
+                        existing_schedules.append(new_schedule)
+                return  # Configuration updated
+        # Configuration not found, add new configuration
+        existing_configs.append(new_config)
+
+    def get_schedule_by_frequency_type(self, schedules: List[Dict[str, Any]], frequency_type: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve a schedule by frequency type from a list of schedules.
+        """
+        for schedule in schedules:
+            if schedule.get('frequency_type') == frequency_type:
+                return schedule
+        return None
+
+    def is_schedule_in_list(self, schedule: Dict[str, Any], schedule_list: List[Dict[str, Any]]) -> bool:
+        """
+        Check if a schedule is already in the schedule list.
+        """
+        for existing_schedule in schedule_list:
+            if existing_schedule == schedule:
+                return True
+        return False
     
+
     def get_url_entry(self, ota: str, url: str) -> Optional[Dict[str, Any]]:
         """
         Retrieve a URL entry from a specific OTA.
@@ -370,159 +422,66 @@ class ConfigReader:
         """
         df = pd.read_csv(csv_file)
         df['URL'] = df['URL'].map(lambda x: x.split('?ranking_uuid')[0] if '?ranking_uuid' in x else x)
-        # Iterate over each row where Done is False
-        for index, row in df[df['Done'] == False].iterrows():
-            action = row['Action'].strip().lower()
-            ota = row['OTA'].strip()
-            url = row['URL'].strip()
-            url = url.split('?ranking_uuid')[0] if '?ranking_uuid' in url else url
-            viewer = row['Viewer'].strip()
-            adults = row['Adults'] if not pd.isna(row['Adults']) else None
-            language = row['Language'].strip() if not pd.isna(row['Language']) else None
-            frequency_type = row['Frequency_Type'].strip().lower() if not pd.isna(row['Frequency_Type']) else None
-            interval = int(row['Interval']) if not pd.isna(row['Interval']) else None
-            occurrences_per_week = int(row['Occurrences_Per_Week']) if not pd.isna(row['Occurrences_Per_Week']) else None
-            occurrences_per_month = int(row['Occurrences_Per_Month']) if not pd.isna(row['Occurrences_Per_Month']) else None
-            times_per_day = int(row['Times_Per_Day']) if not pd.isna(row['Times_Per_Day']) else None
-            days_in_future = int(row['Days_In_Future']) if not pd.isna(row['Days_In_Future']) else None
-            run_day = row['Run_Day'].strip().lower() if not pd.isna(row['Run_Day']) else None
-            extract_hours = row['Extract_Hours'] if 'Extract_Hours' in row and not pd.isna(row['Extract_Hours']) else False
-            
-            # Prepare the configuration dictionary
-            config = {}
-            if adults is not None:
-                config['adults'] = int(adults)
-            if language:
-                config['language'] = language
-            if frequency_type:
-                schedule = {
-                    'frequency_type': frequency_type,
-                    'days_in_future': days_in_future
-                }
-                if frequency_type in ['daily', 'every_other_day']:
-                    schedule['interval'] = interval
-                if frequency_type == 'weekly':
-                    schedule['occurrences_per_week'] = occurrences_per_week
-                if frequency_type == 'monthly':
-                    schedule['occurrences_per_month'] = occurrences_per_month
-                if frequency_type in ['twice_a_day', 'three_times_a_day']:
-                    schedule['times_per_day'] = times_per_day
-                if frequency_type == 'every_other_week':
-                    schedule['run_day'] = run_day
-
-                schedule['extract_hours'] = bool(extract_hours) if extract_hours is not None else False
-                config['schedules'] = [schedule]
-
-            if action == 'add':
-                # Check if URL already exists
-                existing_entry = self.get_url_entry(ota, url)
-                if existing_entry:
-                    print(f"URL '{url}' already exists under OTA '{ota}'. Skipping Add action.")
-                else:
-                    # Aggregate all schedules for this OTA and URL
+        # Iterate over each action
+        actions = ['add', 'update', 'remove']
+        for action in actions:
+            action_df = df[(df['Action'].str.lower() == action) & (df['Done'] == False)]
+            if action_df.empty:
+                continue
+            if action == 'remove':
+                for index, row in action_df.iterrows():
+                    ota = row['OTA'].strip()
+                    url = row['URL'].strip()
+                    url = url.split('?ranking_uuid')[0] if '?ranking_uuid' in url else url
+                    self.remove_url(ota, url)
+                    df.at[index, 'Done'] = True
+            else:
+                # For 'add' and 'update', we need to group by OTA, URL, Adults, Language
+                grouped = action_df.groupby(['OTA', 'URL', 'Adults', 'Language'])
+                for (ota, url, adults, language), group in grouped:
+                    ota = ota.strip()
+                    url = url.strip()
+                    viewer = group['Viewer'].iloc[0].strip()
+                    adults = int(adults) if not pd.isna(adults) else None
+                    language = language.strip() if not pd.isna(language) else None
+                    # Aggregate schedules
                     schedules = []
-                    related_rows = df[
-                        (df['Action'].str.lower() == 'add') &
-                        (df['OTA'].str.strip() == ota) &
-                        (df['URL'].str.strip() == url) &
-                        (df['Done'] == False)
-                    ]
-                    for _, related_row in related_rows.iterrows():
-                        freq_type = related_row['Frequency_Type'].strip().lower() if not pd.isna(related_row['Frequency_Type']) else None
-                        sched = {
-                            'frequency_type': freq_type,
-                            'days_in_future': int(related_row['Days_In_Future']) if not pd.isna(related_row['Days_In_Future']) else None
+                    for _, row in group.iterrows():
+                        frequency_type = row['Frequency_Type'].strip().lower() if not pd.isna(row['Frequency_Type']) else None
+                        schedule = {
+                            'frequency_type': frequency_type,
+                            'days_in_future': int(row['Days_In_Future']) if not pd.isna(row['Days_In_Future']) else None
                         }
-                        if freq_type in ['daily', 'every_other_day']:
-                            sched['interval'] = int(related_row['Interval']) if not pd.isna(related_row['Interval']) else 1
-                        if freq_type == 'weekly':
-                            sched['occurrences_per_week'] = int(related_row['Occurrences_Per_Week']) if not pd.isna(related_row['Occurrences_Per_Week']) else 1
-                        if freq_type == 'monthly':
-                            sched['occurrences_per_month'] = int(related_row['Occurrences_Per_Month']) if not pd.isna(related_row['Occurrences_Per_Month']) else 1
-                        if freq_type in ['twice_a_day', 'three_times_a_day']:
-                            sched['times_per_day'] = int(related_row['Times_Per_Day']) if not pd.isna(related_row['Times_Per_Day']) else 1
-                        if freq_type == 'every_other_week':
-                            sched['run_day'] = related_row['Run_Day'].strip().lower() if not pd.isna(related_row['Run_Day']) else 'monday'
-                        sched['extract_hours'] = bool(related_row['Extract_Hours']) if not pd.isna(related_row['Extract_Hours']) else False
-                        schedules.append(sched)
-                    # Prepare configurations
-                    configurations = [{
-                        'adults': int(row['Adults']) if not pd.isna(row['Adults']) else None,
+                        if frequency_type in ['daily', 'every_other_day']:
+                            schedule['interval'] = int(row['Interval']) if not pd.isna(row['Interval']) else 1
+                        if frequency_type == 'weekly':
+                            schedule['occurrences_per_week'] = int(row['Occurrences_Per_Week']) if not pd.isna(row['Occurrences_Per_Week']) else 1
+                        if frequency_type == 'monthly':
+                            schedule['occurrences_per_month'] = int(row['Occurrences_Per_Month']) if not pd.isna(row['Occurrences_Per_Month']) else 1
+                        if frequency_type in ['twice_a_day', 'three_times_a_day']:
+                            schedule['times_per_day'] = int(row['Times_Per_Day']) if not pd.isna(row['Times_Per_Day']) else 1
+                        if frequency_type == 'every_other_week':
+                            schedule['run_day'] = row['Run_Day'].strip().lower() if not pd.isna(row['Run_Day']) else 'monday'
+                        schedule['extract_hours'] = bool(row['Extract_Hours']) if 'Extract_Hours' in row and not pd.isna(row['Extract_Hours']) else False
+                        schedules.append(schedule)
+                    # Prepare configuration
+                    configuration = {
+                        'adults': adults,
                         'language': language,
                         'schedules': schedules
-                    }]
-                    # Add the URL
-                    self.add_url(ota=ota, url=url, viewer=viewer, configurations=configurations)
-                    # Mark all related rows as Done
-                    df.loc[
-                        (df['Action'].str.lower() == 'add') &
-                        (df['OTA'].str.strip() == ota) &
-                        (df['URL'].str.strip() == url) &
-                        (df['Done'] == False),
-                        'Done'
-                    ] = True
-
-            elif action == 'remove':
-                self.remove_url(ota, url)
-                # Mark the row as Done
-                df.at[index, 'Done'] = True
-
-            elif action == 'update':
-                # Find the existing URL entry
-                existing_entry = self.get_url_entry(ota, url)
-                if not existing_entry:
-                    print(f"URL '{url}' does not exist under OTA '{ota}'. Cannot perform Update action.")
-                    continue
-                # Aggregate all schedules for this OTA and URL
-                schedules = []
-                related_rows = df[
-                    (df['Action'].str.lower() == 'update') &
-                    (df['OTA'].str.strip() == ota) &
-                    (df['URL'].str.strip() == url) &
-                    (df['Done'] == False)
-                ]
-                for _, related_row in related_rows.iterrows():
-                    freq_type = related_row['Frequency_Type'].strip().lower() if not pd.isna(related_row['Frequency_Type']) else None
-                    sched = {
-                        'frequency_type': freq_type,
-                        'days_in_future': int(related_row['Days_In_Future']) if not pd.isna(related_row['Days_In_Future']) else None
                     }
-                    if freq_type in ['daily', 'every_other_day']:
-                        sched['interval'] = int(related_row['Interval']) if not pd.isna(related_row['Interval']) else 1
-                    if freq_type == 'weekly':
-                        sched['occurrences_per_week'] = int(related_row['Occurrences_Per_Week']) if not pd.isna(related_row['Occurrences_Per_Week']) else 1
-                    if freq_type == 'monthly':
-                        sched['occurrences_per_month'] = int(related_row['Occurrences_Per_Month']) if not pd.isna(related_row['Occurrences_Per_Month']) else 1
-                    if freq_type in ['twice_a_day', 'three_times_a_day']:
-                        sched['times_per_day'] = int(related_row['Times_Per_Day']) if not pd.isna(related_row['Times_Per_Day']) else 1
-                    if freq_type == 'every_other_week':
-                        sched['run_day'] = related_row['Run_Day'].strip().lower() if not pd.isna(related_row['Run_Day']) else 'monday'
-                    sched['extract_hours'] = bool(related_row['Extract_Hours']) if not pd.isna(related_row['Extract_Hours']) else False
-                    schedules.append(sched)
-                # Prepare configurations
-                configurations = [{
-                    'adults': int(row['Adults']) if not pd.isna(row['Adults']) else None,
-                    'language': language,
-                    'schedules': schedules
-                }]
-                # Update the URL
-                self.update_url(ota=ota, url=url, viewer=viewer, configurations=configurations)
-                # Mark all related rows as Done
-                df.loc[
-                    (df['Action'].str.lower() == 'update') &
-                    (df['OTA'].str.strip() == ota) &
-                    (df['URL'].str.strip() == url) &
-                    (df['Done'] == False),
-                    'Done'
-                ] = True
-
-            else:
-                print(f"Unknown action '{row['Action']}' at row {index + 2}. Skipping.")
-
+                    configurations = [configuration]
+                    # Call add_url or update_url
+                    if action == 'add':
+                        self.add_url(ota=ota, url=url, viewer=viewer, configurations=configurations)
+                    elif action == 'update':
+                        self.update_url(ota=ota, url=url, viewer=viewer, configurations=configurations)
+                    # Mark all related rows as Done
+                    indices = group.index
+                    df.loc[indices, 'Done'] = True
         # Save the updated configuration
         self.save_config()
 
         # Save the updated CSV file with Done flags updated
         df.to_csv(csv_file, index=False)
         print(f"CSV file '{csv_file}' updated successfully.")
-

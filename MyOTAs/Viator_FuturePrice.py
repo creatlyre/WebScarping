@@ -38,7 +38,8 @@ class ViatorScraper:
         self.proxy_country = random.choice(european_countries)
         self.language = language
         self.date_start_str = date_start_str
-        self.connection_url = f'wss://browser.zenrows.com?apikey={api_key}&proxy_country={self.proxy_country}&session_ttl=15m'
+        self.session_ttl_in_minutes = 15
+        self.connection_url = f'wss://browser.zenrows.com?apikey={api_key}&proxy_country={self.proxy_country}&session_ttl={self.session_ttl_in_minutes}m'
         self.url = url
         self.viewer = viewer
         self.timeframe_days_to_collect = timeframe_days_to_collect
@@ -48,6 +49,8 @@ class ViatorScraper:
         self.browser = None
         self.page = None
         self.output_filename = file_manager.output_file_path
+        
+        
 
 
         self.screenshot_dir = "screenshots"
@@ -59,13 +62,15 @@ class ViatorScraper:
         # Load existing data if file exists
         self.load_existing_data()
 
+        self.dates_to_collect = self.check_collected_dates(url)
+        
         # CSS Selectors
         self.css_accept_button = 'button[id="_evidon-accept-button"]'
         self.css_currency_language_button = '[data-automation="language_currency_button"]'
         self.css_currency_button = '[data-automation="currency"]'
         self.css_currency_list = 'button[class*="currencyRow"]'
         self.css_date_picker = 'input[data-automation="availability-date-picker-input"]'
-        self.css_calendar_overlay = '[data-automation="availability-date-picker-calendar"]'
+        self.css_calendar_overlay = 'div[data-automation="availability-date-picker-overlay"]'
 
         self.css_calendar_next_month_button = 'button[data-automation="availability-date-picker-calendar-next"]'
         self.css_calendar_month_current = 'div[class*="caption"]'
@@ -99,18 +104,20 @@ class ViatorScraper:
         matching_files = glob.glob(pattern)
 
         if matching_files:
-            # Assuming we want the first match found for the day
-            latest_file = matching_files[0]
-            self.existing_data = pd.read_excel(latest_file, engine='openpyxl')
-            self.logger.logger_info.info(f"Loaded data from {latest_file}")
-            #########################
-            # If there is existing fiel for today using that to collect data. For future if schedule more than once a day adjust code here (and probably more places)
-            self.output_filename = latest_file
-            #
-            #########################
+            # Initialize an empty list to store DataFrames
+            data_frames = []
+            for file in matching_files:
+                try:
+                    df = pd.read_excel(file, engine='openpyxl')
+                    data_frames.append(df)
+                    self.logger.logger_info.info(f"Loaded data from {file}")
+                except Exception as e:
+                    self.logger.logger_error.error(f"Error reading {file}: {e}")
+            # Concatenate all DataFrames into one
+            self.existing_data = pd.concat(data_frames, ignore_index=True)
         else:
             self.existing_data = pd.DataFrame()
-            self.logger.logger_info.debug("No matching file found for today; initialized empty DataFrame.")
+            self.logger.logger_info.debug("No matching files found; initialized empty DataFrame.")
 
     def close_logger(self):
         if self.logger:
@@ -135,7 +142,7 @@ class ViatorScraper:
             await self.page.evaluate('''() => { document.documentElement.requestFullscreen(); }''')
             # Record the connection start time and session TTL
             self.connection_start_time = time.time()
-            self.session_ttl = 15 * 60  # 15 minutes in seconds
+            self.session_ttl = self.session_ttl_in_minutes * 60  # 15 minutes in seconds
         except asyncio.TimeoutError:
             self.logger.logger_err.error("Connection to the remote browser timed out. Exiting.")
             sys.exit(1)
@@ -145,6 +152,7 @@ class ViatorScraper:
 
     async def check_and_reconnect(self, url):
         remaining_time = (self.connection_start_time + self.session_ttl) - time.time()
+        self.logger.logger_info.debug(f"Connection remaining time: {remaining_time}")
         if remaining_time <= 45:
             self.logger.logger_info.info("Browser session is about to expire in less than 30 seconds. Reconnecting...")
             await self.browser.close()
@@ -176,6 +184,11 @@ class ViatorScraper:
 
 
     async def scrape(self):
+        # Check if there are dates to collect
+        if not self.dates_to_collect:
+            self.logger.logger_info.info(f"No dates to collect. Exiting scrape process.")
+            self.logger.close_logger()
+            return
         # Validate the WebSocket URL
         is_valid_url = await self.validate_websocket_url(self.connection_url)
         if not is_valid_url:
@@ -188,6 +201,7 @@ class ViatorScraper:
         try:
             # Go through each URL defined
             await self.process_url()
+
 
             self.logger.logger_done.info("Scraping completed successfully.")
 
@@ -263,25 +277,8 @@ class ViatorScraper:
 
     async def collect_data(self, url, viewer):
         # Check existing data for this URL
-        if not self.existing_data.empty:
-            existing_url_data = self.existing_data[self.existing_data['title_url'] == url]
-            existing_dates = existing_url_data['date'].unique()
-        else:
-            existing_dates = []
 
-        date_max_to_do = self.date_start + timedelta(days=self.timeframe_days_to_collect)
-        date_list = [self.date_start + timedelta(days=x) for x in range((date_max_to_do - self.date_start).days)]
-
-        # Remove dates that have already been collected
-        dates_to_collect = []
-        for date in date_list:
-            date_str = date.strftime("%Y-%m-%d")
-            if date_str in existing_dates:
-                self.logger.logger_info.info(f"Data for date {date_str} already collected for URL {url}. Skipping.")
-            else:
-                dates_to_collect.append(date)
-
-        for date in dates_to_collect:
+        for date in self.dates_to_collect:
             await self.check_and_reconnect(url)
             date_str = date.strftime("%Y-%m-%d")
             self.logger.logger_statistics.info(f"Start of processing: {date_str} extract hours set to: {self.extract_hours}")
@@ -303,6 +300,7 @@ class ViatorScraper:
             language_product = []
             product_city = []
             uid_product = []
+            hours_extraction = []
             # Click on the date picker
             await self.click_date_picker()
             date_found = await self.select_date_in_calendar(date, date_str)
@@ -337,12 +335,12 @@ class ViatorScraper:
             if search_button:
                 await self.extract_tour_data(url, viewer, self.num_adults, date_str, prices_adults, date_of_price, 
                                              option_of_price, title_of_price, url_of_price, amount_of_adults, data_viewer, 
-                                             availability, extraction_date, title_product, language_product, product_city, uid_product)
+                                             availability, extraction_date, title_product, language_product, product_city, uid_product, hours_extraction)
             else:
                 self.logger.logger_info.info('Scraping tour date simple')
                 await self.extract_tour_date_simple(url, viewer, self.num_adults, date_str, prices_adults, date_of_price,
                                                      option_of_price, title_of_price, url_of_price, amount_of_adults, data_viewer, 
-                                                     availability, extraction_date, title_product, language_product, product_city, uid_product)
+                                                     availability, extraction_date, title_product, language_product, product_city, uid_product, hours_extraction)
 
             # Store the collected data
             data = {
@@ -353,12 +351,13 @@ class ViatorScraper:
                 'time_range': option_of_price,
                 'price_per_person': prices_adults,
                 'language': language_product,
-                'adutls': amount_of_adults,
+                'adults': amount_of_adults,
                 'title_url': url_of_price,                
                 'city': product_city,
                 'viewer': data_viewer,
                 'availability': availability,
-                'uid': uid_product
+                'uid': uid_product,
+                'hours_extraction': hours_extraction
             }
             df_temp = pd.DataFrame(data)
             await self.save_data_to_excel(df_temp)
@@ -367,6 +366,26 @@ class ViatorScraper:
             
 
         self.logger.logger_done.info(f"Completed processing for URL: {url}")
+
+    def check_collected_dates(self, url):
+        if not self.existing_data.empty:
+            existing_url_data = self.existing_data[self.existing_data['title_url'] == url]
+            existing_dates = existing_url_data['date'].unique()
+        else:
+            existing_dates = []
+
+        date_max_to_do = self.date_start + timedelta(days=self.timeframe_days_to_collect)
+        date_list = [self.date_start + timedelta(days=x) for x in range((date_max_to_do - self.date_start).days)]
+
+        # Remove dates that have already been collected
+        dates_to_collect = []
+        for date in date_list:
+            date_str = date.strftime("%Y-%m-%d")
+            if date_str in existing_dates:
+                self.logger.logger_info.info(f"Data for date {date_str} already collected for URL {url}. Skipping.")
+            else:
+                dates_to_collect.append(date)
+        return dates_to_collect
 
     async def click_date_picker(self):
         try:
@@ -378,17 +397,21 @@ class ViatorScraper:
             
             if date_picker:
                 await date_picker.click()
-
-                ### Retrieve and save the top half of the page after clicking
+                await self.page.waitForSelector(self.css_calendar_overlay)
+                ## Retrieve and save the top half of the page after clicking
                 # await self.take_top_half_screenshot(context_info="After_click_date_picker")
-                ### Log HTML content after clicking the date picker
+                # ## Log HTML content after clicking the date picker
                 # await self.log_html_content(context_info="After_click_date_picker")
 
 
             else:
                 self.logger.logger_err.error("Date picker not found.")
         except Exception as e:
+            await self.take_top_half_screenshot(context_info="Failed to click date picker")
+            ## Log HTML content after clicking the date picker
+            await self.log_html_content(context_info="Failed to click date picker")
             raise self.logger.logger_err.error(f"Failed to click date picker: {e}")
+            
             
 
     async def select_date_in_calendar(self, date, date_str):
@@ -445,12 +468,14 @@ class ViatorScraper:
                 'time_range': ['N/A'],
                 'price_per_person': ['N/A'],
                 'language': [self.language],
-                'adutls': [self.num_adults],
+                'adults': [self.num_adults],
                 'title_url': [url],     
                 'city': [city],           
                 'viewer': [viewer],
                 'availability': [False],
-                'uid': [uid]
+                'uid': [uid],
+                'hours_extraction': [self.extract_hours]
+                
             }
             df_temp = pd.DataFrame(data)
             await self.save_data_to_excel(df_temp)
@@ -511,7 +536,7 @@ class ViatorScraper:
 
     async def extract_tour_data(self, url, viewer, num_adults, date_str, prices_adults, date_of_price, option_of_price, 
                                 title_of_price, url_of_price, amount_of_adults, data_viewer, availability, extraction_date,
-                                title_product, language_product, city_product, uid_product):
+                                title_product, language_product, city_product, uid_product, hours_extraction):
         await self.page.waitForSelector(self.css_tours_list, timeout=10000)
         price_overwrite = False
         tour_title_element = await self.page.querySelector(self.css_product_title)
@@ -544,7 +569,7 @@ class ViatorScraper:
                                 self.logger.logger_info.debug("Clicked to select the unselected tour.")
                                 await asyncio.sleep(0.5)  # Reduced sleep time; adjust as needed
                         elif tour_is_unavailable:
-                            pass                           
+                            pass
 
                     try:
                         # Extract title
@@ -562,7 +587,7 @@ class ViatorScraper:
                                 is_inactive = await self.page.evaluate(
                                     '(element) => Array.from(element.classList).some(cls => cls.includes("inactive"))', hours_button
                                 )
-                                                                # Check if the hour is already selected
+                                # Check if the hour is already selected
                                 is_selected = await self.page.evaluate(
                                     '(element) => Array.from(element.classList).some(cls => cls.includes("selected"))', hours_button
                                 )
@@ -607,6 +632,7 @@ class ViatorScraper:
                                 title_product.append(tour_title)
                                 city_product.append(city)
                                 uid_product.append(uid)
+                                hours_extraction.append(self.extract_hours)
 
                                 self.logger.logger_info.info(f"Collected data - Date: {date_str}, Adults: {num_adults}, Title: {title.strip()}, Option: {hours_text.strip()}, Price: {price.strip()}")
                         else:
@@ -625,11 +651,15 @@ class ViatorScraper:
                             amount_of_adults.append(num_adults)
                             url_of_price.append(url)
                             data_viewer.append(viewer)
-                            availability.append(True)
+                            if price == 'Price unavailable':
+                                availability.append(False)
+                            else:
+                                availability.append(True)
                             language_product.append(self.language)
                             title_product.append(tour_title)
                             city_product.append(city)
                             uid_product.append(uid)
+                            hours_extraction.append(self.extract_hours)
 
                             self.logger.logger_info.info(f"Collected data - Date: {date_str}, Adults: {num_adults}, Title: {title.strip()}, Option: {hours_text.strip()}, Price: {price.strip()}")
 
@@ -642,7 +672,7 @@ class ViatorScraper:
 
     async def extract_tour_date_simple(self, url, viewer, num_adults, date_str, prices_adults, date_of_price, option_of_price, title_of_price, url_of_price, 
                                        amount_of_adults, data_viewer, availability, extraction_date,
-                                       title_product, language_product, city_product, uid_product):
+                                       title_product, language_product, city_product, uid_product, hours_extraction):
         try:
             title_element = await self.page.querySelector(self.css_tour_title)
             title = await (await title_element.getProperty('textContent')).jsonValue() if title_element else "Title unavailable"
@@ -650,13 +680,13 @@ class ViatorScraper:
             price_element = await self.page.querySelector(self.css_tour_grade_price)
             price = await (await price_element.getProperty('textContent')).jsonValue() if price_element else "Price unavailable"
             
-            option_text = "Option unavailable"
+            hours_text = "Option unavailable"
             city = url.split('tours')[1].split('/')[1]
             uid = url.split('/')[-1]
             extraction_date.append(self.date_start_str)
             prices_adults.append(price.strip())
             date_of_price.append(date_str)
-            option_of_price.append(option_text.strip())
+            option_of_price.append(hours_text.strip())
             title_product.append(title.strip())
             title_of_price.append("Option unavailable")
             amount_of_adults.append(num_adults)
@@ -666,9 +696,10 @@ class ViatorScraper:
             language_product.append(self.language)
             city_product.append(city)
             uid_product.append(uid)
+            hours_extraction.append(self.extract_hours)
 
 
-            self.logger.logger_info.info(f"Collected data - Date: {date_str}, Adults: {num_adults}, Title: {title.strip()}, Option: {option_text.strip()}, Price: {price.strip()}")
+            self.logger.logger_info.info(f"Collected data - Date: {date_str}, Adults: {num_adults}, Title: {title.strip()}, Option: {hours_text.strip()}, Price: {price.strip()}")
 
         except Exception as e:
             self.logger.logger_err.error(f"Failed to extract data from tour: {e}")
@@ -813,16 +844,30 @@ def main():
     ####
 
     azure_storage_upload = AzureBlobUploader(file_manager, LoggerManagerFuturePrice(file_manager,'future_price'))
+    print(f'Files to process: {all_excel_file_list}')
     for files_to_upload in all_excel_file_list:
         future_price_file_path = files_to_upload[0]
         future_price_blob_name = files_to_upload[1]
+        
         azure_storage_upload.upload_excel_to_azure_storage_account_future_price(future_price_file_path, future_price_blob_name)
         azure_storage_upload.transform_upload_to_refined_future_price(future_price_file_path, future_price_blob_name)
-
+# %%
 if __name__ == "__main__":
     main()
-     # %%
+# %%
 
+# %%
+### Manual upload file to Storage Account:
+file = 'Viator_2024-11-21_15-00-00_en_1_future_price.xlsx'
+file_split = file.split('_')
+manual_date = f'{file_split[1]} {file_split[2]}'
+language = file_split[3]
+adutls = file_split[4]
+file_manager = FilePathManagerFuturePrice('Viator', 'N/A', adutls, language, True, manual_date)  
+print(f'Will work on file... \n {file}')
 
-
+azure_storage_upload = AzureBlobUploader(file_manager, LoggerManagerFuturePrice(file_manager,'future_price'))
+azure_storage_upload.upload_excel_to_azure_storage_account_future_price(file_manager.output_file_path, file_manager.blob_name)
+azure_storage_upload.transform_upload_to_refined_future_price(file_manager.output_file_path, file_manager.blob_name)
 # 
+# %%
