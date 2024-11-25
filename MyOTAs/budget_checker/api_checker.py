@@ -4,9 +4,9 @@ import requests
 import json
 
 # LOCAL
-BASE_URL = 'http://127.0.0.1:8000'
+BASE_URL = 'http://127.0.0.1:5000'
 # EXTERNAL 
-BASE_URL = "https://future-price-calculator-api-fafyfub8d8f6c0a3.northeurope-01.azurewebsites.net/"
+# BASE_URL = "https://future-price-calculator-api-fafyfub8d8f6c0a3.northeurope-01.azurewebsites.net/"
 
 def test_root_endpoint():
     print("\nTesting Root Endpoint...")
@@ -39,9 +39,25 @@ def test_calculate_activity_positions():
     print("\nTesting Calculate Activity Positions Endpoint...")
     url = f'{BASE_URL}/calculate_activity_positions'
     payload = {
-        "name": "Viator",
+        "name": "URL_1",
         "url": "https://www.viator.com/tours/Venice/Murano-Glass-and-Burano-Lace-Tour-from-Venice/d522-3731MURANO",
         "positions": [
+            {
+                "days_future": 30,
+                "lang_count": 1,
+                "adults_count": 1,
+                "refresh_frequency": "weekly",
+                "refresh_frequency_num": 4,  # 30 refreshes per month (daily)
+                "languages_selected": ["en"],
+                "adults_selected": ["1 Adult"],
+                "frequency_type": "weekly",
+                "interval": 30,
+                "occurrences_per_week": 7,
+                "occurrences_per_month": 30,
+                "times_per_day": 1,
+                "run_day": None,  # Not applicable for daily frequency
+                "extract_hours": False
+            },
             {
                 "days_future": 7,
                 "lang_count": 1,
@@ -57,22 +73,6 @@ def test_calculate_activity_positions():
                 "times_per_day": 1,
                 "run_day": None,  # Not applicable for daily frequency
                 "extract_hours": False
-            },
-            {
-                "days_future": 35,
-                "lang_count": 1,
-                "adults_count": 1,
-                "refresh_frequency": "weekly",
-                "refresh_frequency_num": 4,  # 4 refreshes per month (weekly)
-                "languages_selected": ["en"],
-                "adults_selected": ["1 Adult"],
-                "frequency_type": "weekly",
-                "interval": 4,
-                "occurrences_per_week": 1,
-                "occurrences_per_month": 4,
-                "times_per_day": 1,
-                "run_day": "monday",
-                "extract_hours": False
             }
         ]
     }
@@ -85,7 +85,7 @@ def test_calculate_activity_positions():
         for position in data['positions']:
             print(json.dumps(position, indent=4))
     else:
-        print(f"Error: {response.status_code} - {response.text}")
+        print(f"Error: {response.status_code} - {response.text} ")
 
 def test_calculate_activities():
     print("\nTesting Calculate Activities Endpoint...")
@@ -93,9 +93,25 @@ def test_calculate_activities():
     payload = {
         "activities": [
             {
-                "name": "Viator",
+                "name": "URL_1_Viator",
                 "url": "https://www.viator.com/tours/Venice/Murano-Glass-and-Burano-Lace-Tour-from-Venice/d522-3731MURANO",
                 "positions": [
+                    {
+                        "days_future": 7,
+                        "lang_count": 1,
+                        "adults_count": 2,
+                        "refresh_frequency": "daily",
+                        "refresh_frequency_num": 30,  # 30 refreshes per month (daily)
+                        "languages_selected": ["en"],
+                        "adults_selected": ["1 Adult" , "2 Adults"],
+                        "frequency_type": "daily",
+                        "interval": 30,
+                        "occurrences_per_week": 7,
+                        "occurrences_per_month": 30,
+                        "times_per_day": 1,
+                        "run_day": None,
+                        "extract_hours": False
+                    },
                     {
                         "days_future": 7,
                         "lang_count": 1,
@@ -115,7 +131,7 @@ def test_calculate_activities():
                 ]
             },
             {
-                "name": "GetYourGuide",
+                "name": "URL_2_GYG",
                 "url": "https://www.getyourguide.com/rome-l33/rome-colosseum-roman-forum-and-palatine-hill-guided-tour-t406538/",
                 "positions": [
                     {
@@ -313,9 +329,9 @@ def test_submit_summary():
 # %%
 if __name__ == "__main__":
     test_root_endpoint()
-    test_calculate_cost()
+    # test_calculate_cost()
     # Uncomment the following lines as needed
-    # test_calculate_activity_positions()
+    test_calculate_activity_positions()
     # test_calculate_activities()
     # test_download_csv()
     # test_upload_to_blob()
