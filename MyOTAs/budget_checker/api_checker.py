@@ -43,7 +43,7 @@ def test_calculate_activity_positions():
         "url": "https://www.viator.com/tours/Venice/Murano-Glass-and-Burano-Lace-Tour-from-Venice/d522-3731MURANO",
         "positions": [
             {
-                "days_future": 30,
+                "days_future": 60,
                 "lang_count": 1,
                 "adults_count": 1,
                 "refresh_frequency": "weekly",
@@ -52,14 +52,12 @@ def test_calculate_activity_positions():
                 "adults_selected": ["1 Adult"],
                 "frequency_type": "weekly",
                 "interval": 30,
-                "occurrences_per_week": 7,
-                "occurrences_per_month": 30,
                 "times_per_day": 1,
                 "run_day": None,  # Not applicable for daily frequency
                 "extract_hours": False
             },
             {
-                "days_future": 7,
+                "days_future": 0,
                 "lang_count": 1,
                 "adults_count": 1,
                 "refresh_frequency": "daily",
@@ -309,7 +307,6 @@ def test_submit_summary():
                         "run_day": None,
                         "extract_hours": False
                     },
-                    # Similar options can be added here
                 ]
             }
         ],

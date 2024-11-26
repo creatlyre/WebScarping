@@ -29,8 +29,8 @@ class ViatorScraper:
     def __init__(self, api_key, url, viewer, file_manager, date_start_str, timeframe_days_to_collect=7, num_adults=1, language='en', extract_hours=False):
         self.api_key = api_key
         european_countries = [
-            'al', 'ad', 'at', 'by', 'be', 'ba', 'bg', 'hr', 'cy', 'cz', 'dk', 'ee', 'fi', 
-            'fr', 'de', 'gr', 'hu', 'is', 'ie', 'it', 'lv', 'li', 'lt', 'lu', 'mt', 'md', 
+            'al', 'ad', 'at', 'be', 'ba', 'bg', 'hr', 'cy', 'cz', 'dk', 'ee', 'fi', 
+            'fr', 'de', 'gr', 'hu', 'is', 'ie', 'it', 'lv', 'li', 'lt', 'lu', 'mt', 
             'mc', 'me', 'nl', 'mk', 'no', 'pl', 'pt', 'ro', 'ru', 'sm', 'sk', 'si', 
             'es', 'se', 'ch', 'ua', 'gb']
         
@@ -188,7 +188,7 @@ class ViatorScraper:
         if not self.dates_to_collect:
             self.logger.logger_info.info(f"No dates to collect. Exiting scrape process.")
             self.logger.close_logger()
-            return
+            return True
         # Validate the WebSocket URL
         is_valid_url = await self.validate_websocket_url(self.connection_url)
         if not is_valid_url:
@@ -210,6 +210,7 @@ class ViatorScraper:
             await self.browser.close()
             self.logger.logger_done.info("Browser connection closed.")
             self.logger.close_logger()
+            return True
 
     async def process_url(self):
         url = self.url
@@ -446,7 +447,7 @@ class ViatorScraper:
                             date_found = True
                             break
                 if not date_found:
-                    self.logger.logger_err.error(f"Date {date_str} not found in calendar.")
+                    self.logger.logger_done.info(f"Date {date_str} not available in calendar.")
             
                 return date_found
         except Exception as e:
@@ -810,7 +811,7 @@ def main():
     for item in urls:
             url = item['url']
             viewer = item["viewer"]
-            
+            url_processed = False
             for config in item['configurations']:
                 adults = config['adults']
                 language = config['language']
@@ -827,9 +828,12 @@ def main():
                     file_manager = FilePathManagerFuturePrice(site, 'N/A', adults, language)  
                     all_excel_file_list.add((file_manager.output_file_path, file_manager.blob_name))
                     print(f"Running script for URL: {url}, Adults: {adults}, Language: {language}, Frequency: {frequency}, Max Days: {max_days}")
-                    scraper = ViatorScraper(API_KEY, url, viewer, file_manager, date_start_str=date_start_str, timeframe_days_to_collect=max_days, 
-                                            num_adults=adults,extract_hours=extract_hours)
-                    asyncio.run(scraper.scrape())
+                    while True:
+                        scraper = ViatorScraper(API_KEY, url, viewer, file_manager, date_start_str=date_start_str, timeframe_days_to_collect=max_days, 
+                                                num_adults=adults,extract_hours=extract_hours)
+                        url_processed = asyncio.run(scraper.scrape())
+                        if url_processed:
+                            break
 
                 # Handle multiple times per day if applicable
                 # config_reader_instance = config_reader  # Reference to ConfigReader instance
@@ -858,16 +862,16 @@ if __name__ == "__main__":
 
 # %%
 ### Manual upload file to Storage Account:
-file = 'Viator_2024-11-21_15-00-00_en_1_future_price.xlsx'
-file_split = file.split('_')
-manual_date = f'{file_split[1]} {file_split[2]}'
-language = file_split[3]
-adutls = file_split[4]
-file_manager = FilePathManagerFuturePrice('Viator', 'N/A', adutls, language, True, manual_date)  
-print(f'Will work on file... \n {file}')
+# file = 'Viator_2024-11-21_15-00-00_en_1_future_price.xlsx'
+# file_split = file.split('_')
+# manual_date = f'{file_split[1]} {file_split[2]}'
+# language = file_split[3]
+# adutls = file_split[4]
+# file_manager = FilePathManagerFuturePrice('Viator', 'N/A', adutls, language, True, manual_date)  
+# print(f'Will work on file... \n {file}')
 
-azure_storage_upload = AzureBlobUploader(file_manager, LoggerManagerFuturePrice(file_manager,'future_price'))
-azure_storage_upload.upload_excel_to_azure_storage_account_future_price(file_manager.output_file_path, file_manager.blob_name)
-azure_storage_upload.transform_upload_to_refined_future_price(file_manager.output_file_path, file_manager.blob_name)
+# azure_storage_upload = AzureBlobUploader(file_manager, LoggerManagerFuturePrice(file_manager,'future_price'))
+# azure_storage_upload.upload_excel_to_azure_storage_account_future_price(file_manager.output_file_path, file_manager.blob_name)
+# azure_storage_upload.transform_upload_to_refined_future_price(file_manager.output_file_path, file_manager.blob_name)
 # 
 # %%
