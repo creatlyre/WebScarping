@@ -317,7 +317,7 @@ class ViatorScraper:
             modal_exisit = await self.check_modal_prompt_not_available_day(date_str)
             if modal_exisit:
                 end_time = time.perf_counter()
-                self.logger.logger_statistics.info(f"End of processing: {date_str}. Time: {(end_time-start_time):.6f}")
+                self.logger.logger_statistics.info(f"End of processing: {date_str}. Time: {(end_time-start_time):.6f} hours set to: {self.extract_hours}")
                 await self.update_missing_date_spreadsheet(date_str, url, viewer)
                 continue # Skip to the next date
             try:
@@ -327,7 +327,7 @@ class ViatorScraper:
                 modal_exisit = await self.check_modal_prompt_not_available_day(date_str)
                 if modal_exisit:
                     end_time = time.perf_counter()
-                    self.logger.logger_statistics.info(f"End of processing: {date_str}. Time: {(end_time-start_time):.6f}")
+                    self.logger.logger_statistics.info(f"End of processing: {date_str}. Time: {(end_time-start_time):.6f} hours set to: {self.extract_hours}")
                     await self.update_missing_date_spreadsheet(date_str, url, viewer)
                     continue # Skip to the next date
 
@@ -363,7 +363,7 @@ class ViatorScraper:
             df_temp = pd.DataFrame(data)
             await self.save_data_to_excel(df_temp)
             end_time = time.perf_counter()
-            self.logger.logger_statistics.info(f"End of processing: {date_str}. Time: {(end_time-start_time):.6f}")
+            self.logger.logger_statistics.info(f"End of processing: {date_str}. Time: {(end_time-start_time):.6f} hours set to: {self.extract_hours}")
             
 
         self.logger.logger_done.info(f"Completed processing for URL: {url}")
