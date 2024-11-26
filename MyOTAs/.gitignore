@@ -14,7 +14,6 @@ env/
 
 # Ignore working files and temp files
 working_files/
-*.ipynb_checkpoints
 
 # Ignore local folder with screenshots etc.
 html_snapshots/
