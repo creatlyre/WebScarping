@@ -51,11 +51,31 @@ def main():
             email = row['Email']
             
             logger.logger_info.info(f"Comparing prices for URL: {url}")
-            meesage, product, product_url, price_yesterday, price_today, date_today = comparator.compare_prices(url)
-            print(meesage)
-            EmailSenderAlerts(email, product, product_url, date_today, price_yesterday, price_today, logger)
+            status, result = comparator.compare_prices(url, site)
+            if status == 'success':
+                message = result['message']
+                product = result['product']
+                product_url = result['product_url']
+                price_yesterday = result['price_yesterday']
+                price_today = result['price_today']
+                date_today = result['date_today']
+                # Proceed with further processing, e.g., sending an email
+                logger.logger_info.info(f"Price comparison successful: {message}")
+                EmailSenderAlerts(email, product, product_url, date_today, price_yesterday, price_today, logger)
+            elif status == 'no_data':
+                logger.logger_info.info(result)
+            elif status == 'no_change':
+                logger.logger_info.info(result)
+            elif status == 'error':
+                logger.logger_err.error(result)
+            else:
+                logger.logger_err.error(f"Unexpected status: {status}")
 
         logger.close_logger()
 
 if __name__ == "__main__":
+    # site = 'GYG'
+    # file_manager = FilePathManager(site, "NA")
+    # logger = LoggerManager(file_manager, f'{site}_price_alerts')
+    # EmailSenderAlerts('wojbal3@gmail.com', 'TEST PRODUCT', 'URL', '2024-11-29', '159', '179', logger)
     main()

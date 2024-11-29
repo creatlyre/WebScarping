@@ -117,24 +117,29 @@ class AzureBlobPriceComparator:
             if os.path.exists(yesterday_file_path):
                 os.remove(yesterday_file_path)
 
-    def compare_prices(self, url):
+    def compare_prices(self, url, site):
         if self.today_df is None or self.yesterday_df is None:
             self.logger.logger_err.error("DataFrames not loaded. Cannot compare prices.")
-            return
+            return 'error', 'DataFrames not loaded.'
 
         try:
             # Filter the DataFrames for the given URL
             merged_df = self.merged_df[self.merged_df['Tytul URL'] == url]
-            
+
             if merged_df.empty:
                 self.logger.logger_info.info(f"No data found for URL: {url}")
-                return
+                return 'no_data', f"No data found for URL: {url}"
+
+            # Ensure price columns are numeric
+            merged_df['Cena_today'] = pd.to_numeric(merged_df['Cena_today'], errors='coerce')
+            merged_df['Cena_yesterday'] = pd.to_numeric(merged_df['Cena_yesterday'], errors='coerce')
 
             # Compare the prices
             merged_df['Price_Changed'] = merged_df['Cena_today'] != merged_df['Cena_yesterday']
 
             # Get the products with price changes
             price_changes = merged_df[merged_df['Price_Changed']]
+            price_threshold = 0.03  # 3% threshold for price difference
 
             if not price_changes.empty:
                 self.logger.logger_info.info("Price change detected for the given URL:")
@@ -143,14 +148,65 @@ class AzureBlobPriceComparator:
                     product_url = row['Tytul URL']
                     price_yesterday = row['Cena_yesterday']
                     price_today = row['Cena_today']
-                    date_today = row['Data zestawienia_today']
+                    # Handle date parsing
+                    date_today_raw = row['Data zestawienia_today']
+                    if isinstance(date_today_raw, datetime):
+                        date_today = date_today_raw.strftime('%Y-%m-%d')
+                    elif isinstance(date_today_raw, str):
+                        try:
+                            date_today = datetime.strptime(date_today_raw, '%Y-%m-%d').strftime('%Y-%m-%d')
+                        except ValueError:
+                            date_today = date_today_raw  # Use as is
+                    else:
+                        date_today = str(date_today_raw)
+
                     message = f"Product: {product}, Price Yesterday: {price_yesterday}, Price Today: {price_today}"
                     self.logger.logger_info.info(message)
-                    return message, product, product_url, price_yesterday, price_today, date_today
+
+                    if site == 'Viator':
+                        # Check if price change is bigger than threshold
+                        if price_yesterday == 0 or pd.isna(price_yesterday):
+                            self.logger.logger_err.error("Price yesterday is zero or NaN, cannot compute percentage change.")
+                            continue
+                        price_change_percent = abs(price_today - price_yesterday) / price_yesterday
+                        if price_change_percent > price_threshold:
+                            # Price change is significant; return the data
+                            data = {
+                                'message': message,
+                                'product': product,
+                                'product_url': product_url,
+                                'price_yesterday': price_yesterday,
+                                'price_today': price_today,
+                                'date_today': date_today
+                            }
+                            return 'success', data
+                        else:
+                            message = "No significant price changes detected for the given URL."
+                            return 'no_change', message
+                    else:
+                        # For other sites, return the data regardless of the threshold
+                        data = {
+                            'message': message,
+                            'product': product,
+                            'product_url': product_url,
+                            'price_yesterday': price_yesterday,
+                            'price_today': price_today,
+                            'date_today': date_today
+                        }
+                        return 'success', data
+
+                # After processing all price changes
+                message = "No significant price changes detected for the given URL."
+                self.logger.logger_info.info(message)
+                return 'no_change', message
             else:
                 message = "No price changes detected for the given URL."
                 self.logger.logger_info.info(message)
-                return message
+                return 'no_change', message
+
+        except Exception as e:
+            self.logger.logger_err.error(f"An error occurred while comparing prices: {e}")
+            return 'error', f"An error occurred while comparing prices: {e}"
 
 
         except Exception as e:
