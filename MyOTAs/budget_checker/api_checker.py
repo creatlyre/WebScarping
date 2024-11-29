@@ -6,7 +6,7 @@ import json
 # LOCAL
 BASE_URL = 'http://127.0.0.1:5000'
 # EXTERNAL 
-# BASE_URL = "https://future-price-calculator-api-fafyfub8d8f6c0a3.northeurope-01.azurewebsites.net/"
+BASE_URL = "https://future-price-calculator-api-fafyfub8d8f6c0a3.northeurope-01.azurewebsites.net/"
 
 def test_root_endpoint():
     print("\nTesting Root Endpoint...")
@@ -41,13 +41,14 @@ def test_calculate_activity_positions():
     payload = {
         "name": "URL_1",
         "url": "https://www.viator.com/tours/Venice/Murano-Glass-and-Burano-Lace-Tour-from-Venice/d522-3731MURANO",
+        "ota": 'Viator',
         "positions": [
             {
-                "days_future": 60,
+                "days_future": 7,
                 "lang_count": 1,
                 "adults_count": 1,
-                "refresh_frequency": "weekly",
-                "refresh_frequency_num": 4,  # 30 refreshes per month (daily)
+                "refresh_frequency": "daily",
+                "refresh_frequency_num": 30,  # 30 refreshes per month (daily)
                 "languages_selected": ["en"],
                 "adults_selected": ["1 Adult"],
                 "frequency_type": "weekly",
@@ -57,11 +58,11 @@ def test_calculate_activity_positions():
                 "extract_hours": False
             },
             {
-                "days_future": 0,
+                "days_future": 150,
                 "lang_count": 1,
                 "adults_count": 1,
                 "refresh_frequency": "daily",
-                "refresh_frequency_num": 30,  # 30 refreshes per month (daily)
+                "refresh_frequency_num": 8,  # 30 refreshes per month (daily)
                 "languages_selected": ["en"],
                 "adults_selected": ["1 Adult"],
                 "frequency_type": "daily",
@@ -78,10 +79,10 @@ def test_calculate_activity_positions():
     response = requests.post(url, headers=headers, data=json.dumps(payload))
     if response.status_code == 200:
         data = response.json()
-        print(f"Total Cost for Activity '{payload['name']}': {data['total_cost']:.4f} EUR")
         print("Positions:")
         for position in data['positions']:
             print(json.dumps(position, indent=4))
+        print(f"Total Cost for Activity '{payload['name']}': {data['total_cost']:.4f} EUR")
     else:
         print(f"Error: {response.status_code} - {response.text} ")
 

@@ -55,8 +55,8 @@ storage_account_name = "storagemyotas"
 storage_account_key = "vyHHUXSN761ELqivtl/U3F61lUY27jGrLIKOyAplmE0krUzwaJuFVomDXsIc51ZkFWMjtxZ8wJiN+AStbsJHjA=="
 
 # Set the name of the container and the desired blob name
-container_name_raw = "raw/daily/viator"
-container_name_refined = "refined/daily/viator"
+container_name_raw = "raw/daily/Viator"
+container_name_refined = "refined/daily/Viator"
 
 blob_name = fr'Viator - {date_today}.xlsx'
 file_path_logs_processed = fr'G:/.shortcut-targets-by-id/1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2/MyOTAs/Baza Excel/Logs/files_processed/{blob_name.split(".")[0]}'
