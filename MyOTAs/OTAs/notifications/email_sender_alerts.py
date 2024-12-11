@@ -112,10 +112,10 @@ class EmailSenderAlerts:
                     "to": [{"address": f"{self.email_address}"}],
                 },
                 "content": {
-                    "subject": "MyOTAs: Your Latest Product Performance Report",
+                    "subject": "MyOTAs: Latest Product Report",
                     "plainText": (
                         "Hello,\n\n"
-                        "Your product performance report is ready. "
+                        "Product performance report is ready. "
                         "Key insights and a detailed PDF are attached.\n\n"
                         "Best regards,\nMyOTAs Team"
                     ),
@@ -179,8 +179,8 @@ class EmailSenderAlerts:
                                 <h1>Your Product Report</h1>
                             </div>
                             <div class="content">
-                                <p>Dear Partner,</p>
-                                <p>Your latest performance insights are here. Check out the key highlights below:</p>
+                                <p>Hello,</p>
+                                <p>Latest performance insights are here. Check out the key highlights below:</p>
                                 <div class="overview">
                                     {overview_html}
                                 </div>
@@ -189,7 +189,7 @@ class EmailSenderAlerts:
                                 <p><strong>Best regards,<br/>MyOTAs Team</strong></p>
                             </div>
                             <div class="footer">
-                                © {datetime.now().year} MyOTAs.com | Automated Performance Report
+                                © {datetime.now().year} MyOTAs.com | Automated Product Reports
                             </div>
                         </body>
                         </html>

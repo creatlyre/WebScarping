@@ -22,12 +22,12 @@ historical_review = HistoricalReportGenerator(file_manager.USERNAME, file_manage
 
 
 url = input("URL Input:")
-historical_review.run_report(url, date_filter=None)
+historical_review.run_report(url, date_filter='last_year')
 
 # Convert the overview to an HTML-compatible string
 overview_html = "<br>".join(historical_review.overview)
 
-# date filter option: None, previous_month previous_week previous_quarter last_week
+# date filter option: None, previous_month previous_week previous_quarter last_week, last year,
 if historical_review.output_filename:
     email_sender = EmailSenderAlerts("wojbal3@gmail.com", "Test_123", url, "2024-12-11", "N/A", "N/A", logger)
     email_sender.send_report_email_with_attachment(historical_review.output_filename, overview_html) 

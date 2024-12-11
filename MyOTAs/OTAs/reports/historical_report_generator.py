@@ -150,6 +150,8 @@ class HistoricalReportGenerator:
                                 "((MONTH(GETDATE())-1)/3)*3 + 1, 1)) "
                                 "AND [Data zestawienia] < DATEFROMPARTS(YEAR(GETDATE()), ((MONTH(GETDATE())-1)/3 + 1)*3 + 1, 1)",
             'last_week': "[Data zestawienia] >= DATEADD(DAY, -7, GETDATE())",
+
+            'last_year': "[Data zestawienia] >= DATEADD(DAY, -365, GETDATE())",
         }
 
         # Determine the date filter condition
