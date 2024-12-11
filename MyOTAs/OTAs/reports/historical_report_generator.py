@@ -47,11 +47,14 @@ class HistoricalReportGenerator:
     # Path to wkhtmltopdf executable
     WKHTMLTOPDF_PATH = r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe'  # Update this path if different
 
-    def __init__(self, username, password, logo_path='logo_color.png'):
+    def __init__(self, username, password, logo_path='reports\logo_color.png'):
         self.USERNAME = username
         self.PASSWORD = password
         self.cnxn = None
-        self.logo_base64 = self.load_logo_base64(logo_path)
+        self.logo_path = os.path.join(project_root, logo_path)
+        self.logo_base64 = self.load_logo_base64()
+
+        self.overview = []  # Store a brief summary for external use
 
     # ------------------------- Utility Functions -----------------------------
 
@@ -187,6 +190,7 @@ class HistoricalReportGenerator:
             return None
         
     def generate_dynamic_explanations_price_over_time(self, df_primary):
+        df_primary = df_primary.reset_index()
     # Calculate basic stats for price data
         price_min = df_primary['Cena'].min()
         price_max = df_primary['Cena'].max()
@@ -304,20 +308,27 @@ class HistoricalReportGenerator:
         # Handle 'Cena' (Price): Remove currency symbols and convert to float
         df['Cena'] = df['Cena'].replace({'€': '', ',': '', ' ': ''}, regex=True)
         df['Cena'] = pd.to_numeric(df['Cena'], errors='coerce')
+        df['IloscOpini'] = df['IloscOpini'].replace(',', '')
 
         # Handle 'IloscOpini' (Number of Reviews): Extract numeric value
         def extract_reviews(x):
             if pd.isna(x):
                 return None
-            match = re.search(r'(\d+)', str(x))
-            if match:
-                return int(match.group(1))
-            else:
-                try:
-                    return int(x)
-                except:
-                    return None
 
+            # Convert input to string
+            s = str(x).strip()
+
+            # Remove thousand separators like commas
+            s = s.replace(",", "")
+
+            # Attempt float conversion
+            try:
+                # Convert to float first, then to int
+                f = float(s)
+                return int(f)
+            except ValueError:
+                # If it can't be converted to a float, return None
+                return None
         df['IloscOpini'] = df['IloscOpini'].apply(extract_reviews)
 
         # Handle 'Booked': Extract numeric value from strings like 'Booked X number on Day'
@@ -523,7 +534,7 @@ class HistoricalReportGenerator:
 
         # Analyze Reviews Increase per Month based on Primary Category
         df_primary.set_index('Data zestawienia', inplace=True)
-        reviews_monthly_primary = df_primary['IloscOpini'].resample('M').sum().reset_index()
+        reviews_monthly_primary = df_primary['IloscOpini'].resample('ME').sum().reset_index()
         reviews_monthly_primary.rename(columns={'IloscOpini': 'Total Reviews'}, inplace=True)
         reviews_monthly_primary['Review_Increase'] = reviews_monthly_primary['Total Reviews'].pct_change().fillna(0) * 100  # Percentage Change
 
@@ -658,6 +669,25 @@ class HistoricalReportGenerator:
             'Category Distribution': 'This pie chart displays the distribution of different categories, providing insight into the variety and prevalence of each category within the dataset.',
             'Position by Category': 'This box plot illustrates the distribution of positions within each category, highlighting any correlations or differences between categories.'
         }
+
+        title = df['Tytul'].iloc[0] if not df['Tytul'].isnull().all() else "No Title Available"
+        title_url = df['Tytul Url'].iloc[0] if 'Tytul Url' in df.columns and not df['Tytul Url'].isnull().all() else None
+
+        # Create title as HREF
+        if title_url:
+            title_href = f'<a href="{title_url}" target="_blank">{title}</a>'
+        else:
+            title_href = title
+        # Populate the overview attribute
+        self.overview = [
+            f"Title: {title_href}",
+            f"Total records analyzed: {len(df)}",
+            f"Date range: {df['Data zestawienia'].min().strftime('%Y-%m-%d')} to {df['Data zestawienia'].max().strftime('%Y-%m-%d')}",
+            f"Average price: €{summary['Average Price']:.2f}",
+            f"Highest price: €{df['Cena'].max():.2f} on {df.loc[df['Cena'].idxmax(), 'Data zestawienia'].strftime('%Y-%m-%d')}",
+            f"Number of reviews: {int(summary['Total Reviews'])} (Average: {summary['Average Number of Reviews']:.2f} per record)",
+            f"Total bookings (if available): {booked_summary['Total Bookings']}" if booked_summary else "Booking data not available",
+        ]
 
         return summary, reviews_daily_primary, review_stats, booked_summary, plots, chart_explanations, category_counts_dict, position_stats
 
@@ -1296,8 +1326,10 @@ class HistoricalReportGenerator:
         try:
             pdfkit.from_string(html_content, output_filename, options=options, configuration=config)
             logging.info(f"PDF report generated: {output_filename}")
+            self.output_filename = output_filename
         except Exception as e:
             logging.error(f"Error generating PDF: {e}", exc_info=True)
+            return None
 
 
     # ------------------------- Utility Methods ------------------------------
@@ -1319,14 +1351,15 @@ class HistoricalReportGenerator:
         img_str = base64.b64encode(buffered.getvalue()).decode()
         return f"data:image/png;base64,{img_str}"
 
-    def load_logo_base64(self, path='logo.png') -> str:
+    def load_logo_base64(self) -> str:
         """
         Loads an image from the specified path and returns its base64-encoded string.
         """
-        if not os.path.exists(path):
-            logging.error(f"Logo file not found at {path}. Please provide a valid logo image.")
+        if not os.path.exists(self.logo_path):
+            print(os.getcwd())
+            logging.error(f"Logo file not found at {self.logo_path}. Please provide a valid logo image.")
             return ''
-        with open(path, "rb") as image_file:
+        with open(self.logo_path, "rb") as image_file:
             encoded_string = base64.b64encode(image_file.read()).decode()
             return encoded_string
 

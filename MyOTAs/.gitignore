@@ -18,3 +18,4 @@ working_files/
 # Ignore local folder with screenshots etc.
 html_snapshots/
 screenshots/
+PDF_reports/

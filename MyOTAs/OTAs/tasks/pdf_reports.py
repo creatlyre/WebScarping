@@ -10,8 +10,13 @@ sys.path.append(project_root)
 
 from file_management.file_path_manager import ConnectorsSQL_OTA
 from reports.historical_report_generator import HistoricalReportGenerator
+from notifications.email_sender_alerts import EmailSenderAlerts
+from logger.logger_manager import LoggerManager
+from file_management.file_path_manager import FilePathManager
 
 file_manager = ConnectorsSQL_OTA()
+file_manager_logger = FilePathManager("TEST", "NA")
+logger = LoggerManager(file_manager_logger, f'PDF_reports')
 
 historical_review = HistoricalReportGenerator(file_manager.USERNAME, file_manager.PASSWORD)
 
@@ -19,4 +24,10 @@ historical_review = HistoricalReportGenerator(file_manager.USERNAME, file_manage
 url = input("URL Input:")
 historical_review.run_report(url, date_filter=None)
 
-# date filter option: previous_month previous_week previous_quarter last_week
+# Convert the overview to an HTML-compatible string
+overview_html = "<br>".join(historical_review.overview)
+
+# date filter option: None, previous_month previous_week previous_quarter last_week
+if historical_review.output_filename:
+    email_sender = EmailSenderAlerts("wojbal3@gmail.com", "Test_123", url, "2024-12-11", "N/A", "N/A", logger)
+    email_sender.send_report_email_with_attachment(historical_review.output_filename, overview_html) 
