@@ -91,7 +91,7 @@ class EmailSenderAlerts:
     def send_report_email_with_attachment(self, pdf_path, overview_html):
         """
         Sends an automated scheduled product report email with the given PDF file attached.
-        Includes a short overview of the PDF content in the email body.
+        Includes a concise overview of the PDF content in the email body.
         """
         try:
             # Read PDF file and encode in base64
@@ -112,15 +112,12 @@ class EmailSenderAlerts:
                     "to": [{"address": f"{self.email_address}"}],
                 },
                 "content": {
-                    "subject": "Your Comprehensive Automated Product Report",
+                    "subject": "MyOTAs: Your Latest Product Performance Report",
                     "plainText": (
                         "Hello,\n\n"
-                        "We are pleased to provide you with your latest product performance report.\n"
-                        "This detailed PDF includes insights into pricing, reviews, and more, "
-                        "helping you make data-driven decisions.\n\n"
-                        "Please find the attached PDF report.\n\n"
-                        "Best regards,\n"
-                        "MyOTAs Team"
+                        "Your product performance report is ready. "
+                        "Key insights and a detailed PDF are attached.\n\n"
+                        "Best regards,\nMyOTAs Team"
                     ),
                     "html": f"""
                         <html>
@@ -129,79 +126,70 @@ class EmailSenderAlerts:
                             <meta name="viewport" content="width=device-width, initial-scale=1.0" />
                             <style>
                                 body {{
-                                    font-family: Arial, sans-serif; 
-                                    color: #333; 
-                                    line-height: 1.6; 
-                                    margin: 0; 
-                                    padding: 0;
+                                    font-family: 'Arial', sans-serif;
+                                    max-width: 600px;
+                                    margin: 0 auto;
+                                    color: #333;
+                                    line-height: 1.6;
+                                    padding: 20px;
+                                }}
+                                .logo-container {{
+                                    text-align: center;
+                                    margin-bottom: 20px;
+                                }}
+                                .logo {{
+                                    max-width: 250px;
+                                    height: auto;
                                 }}
                                 .header {{
                                     background-color: #009ADB;
-                                    padding: 20px;
+                                    color: white;
                                     text-align: center;
-                                    color: #ffffff;
-                                }}
-                                .content {{
-                                    padding: 20px;
-                                }}
-                                .content h2 {{
-                                    color: #009ADB;
-                                    font-size: 24px;
-                                    margin-top: 0;
-                                }}
-                                .report-overview {{
-                                    background-color: #f9f9f9;
-                                    border: 1px solid #ddd;
                                     padding: 15px;
                                     border-radius: 5px;
-                                    margin: 20px 0;
+                                    margin-bottom: 20px;
                                 }}
-                                .report-overview h3 {{
-                                    color: #009ADB;
-                                    margin-top: 0;
+                                .content {{
+                                    background-color: #f9f9f9;
+                                    padding: 20px;
+                                    border: 1px solid #e0e0e0;
+                                    border-radius: 5px;
                                 }}
-                                .report-overview p {{
-                                    margin: 5px 0;
+                                .overview {{
+                                    background-color: white;
+                                    border: 1px solid #ddd;
+                                    padding: 15px;
+                                    margin: 15px 0;
+                                    border-radius: 5px;
                                 }}
                                 .footer {{
                                     text-align: center;
-                                    color: #999;
+                                    color: #777;
                                     font-size: 12px;
-                                    padding: 20px;
-                                }}
-                                a.button {{
-                                    background-color: #009ADB;
-                                    color: #ffffff;
-                                    padding: 10px 20px;
-                                    text-decoration: none;
-                                    border-radius: 4px;
-                                    font-weight: bold;
-                                }}
-                                a.button:hover {{
-                                    background-color: #0079a8;
+                                    margin-top: 20px;
                                 }}
                             </style>
                         </head>
                         <body>
+                            <div class="logo-container">
+                                <img src="https://sapublicresourcesmyotas.blob.core.windows.net/resources/logo_color.png" 
+                                    alt="MyOTAs Logo" class="logo" />
+                            </div>
                             <div class="header">
-                                <img src="https://sapublicresourcesmyotas.blob.core.windows.net/resources/logo_color.png" alt="MyOTAs Logo" style="max-width: 200px; margin-bottom: 10px;" /><br/>
-                                <h1>Your Scheduled Product Report</h1>
+                                <h1>Your Product Report</h1>
                             </div>
                             <div class="content">
-                                <h2>Overview & Insights</h2>
-                                <p>Dear Valued Partner,</p>
-                                <p>We are pleased to share your automated product report, offering a deep dive into the latest performance metrics. Below is a snapshot of key insights:</p>
-                                <div class="report-overview">
+                                <p>Dear Partner,</p>
+                                <p>Your latest performance insights are here. Check out the key highlights below:</p>
+                                <div class="overview">
                                     {overview_html}
                                 </div>
-                                <p>For a detailed analysis, please review the attached PDF report. It includes comprehensive data on pricing trends, user reviews, and other valuable metrics to help you make informed decisions.</p>
-                                <p>Should you have any questions or require further assistance, feel free to reach out to our support team.</p>
-                                <p>Thank you for choosing MyOTAs!</p>
+                                <p>Full details are available in the attached PDF report.</p>
+                                <p>Need help? Contact our support team.</p>
                                 <p><strong>Best regards,<br/>MyOTAs Team</strong></p>
                             </div>
                             <div class="footer">
-                                <p>You are receiving this email because you subscribed to MyOTAs reports.</p>
-                                <p>© {datetime.now().year} MyOTAs.com. All rights reserved.</p>
+                                © {datetime.now().year} MyOTAs.com | Automated Performance Report
                             </div>
                         </body>
                         </html>

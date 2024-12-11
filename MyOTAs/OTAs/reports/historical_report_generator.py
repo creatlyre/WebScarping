@@ -1187,7 +1187,7 @@ class HistoricalReportGenerator:
     <body>
 
         <header>
-            <img src="data:image/png;base64,{logo_base64}" alt="Logo" class="logo">
+            <img src="https://sapublicresourcesmyotas.blob.core.windows.net/resources/logo_color.png" alt="Logo" class="logo">
             <h1><a href="{url}">{report_title}</a></h1>
         </header>
 
@@ -1260,7 +1260,7 @@ class HistoricalReportGenerator:
         # Footer with Updated Structure
         html += f"""<footer>
         <div class="footer-main">
-            <img src="data:image/png;base64,{logo_base64}" alt="Logo" class="logo">
+            <img src="https://sapublicresourcesmyotas.blob.core.windows.net/resources/logo_color.png" alt="Logo" class="logo">
             <span>&copy; {datetime.now().year} MyOTAs. All rights reserved.</span>
         </div>
         <div class="footer-date">
