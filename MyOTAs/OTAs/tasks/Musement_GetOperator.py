@@ -86,5 +86,5 @@ for index, row in df.iterrows():
             scraper.save_dataframe(df, file_path_xlsx_operator)
         logger.logger_done.info(f"Closed scraper for URL: {url}")
 
-scraper._save_dataframe(df)
+scraper.save_dataframe(df, file_path_xlsx_operator)
 

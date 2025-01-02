@@ -709,7 +709,7 @@ def process_city(row, thread_name = None):
         page = int(city_done_msg.drop_duplicates(subset='City', keep='last')['Page'].iloc[0]) + 1
         logger_info.info(f'Resuming {city_input}-{category_input} from page {page} of {max_pages}')
     elif os.path.exists(city_path_done_archive):
-        logger_done.info('City already in Archive folder moving further')
+        logger_done.info(f'City already in Archive folder moving further {city_input}-{category_input}')
         return
     
     while page <= max_pages:

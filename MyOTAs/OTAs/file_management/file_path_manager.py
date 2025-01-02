@@ -69,3 +69,11 @@ class DetermineDebugRun:
         self.local_path = os.getcwd()
         # Initialize a debug attribute based on the condition
         self.debug = "wojciech" in self.local_path.lower() and check_for_debug
+
+class AzureConfigs_OTA:
+    def __init__(self):
+        # Azure Config
+        self.AZURE_TENANT_ID = "39ffbbb3-2e77-41c7-94df-5b52eef42062"
+        self.AZURE_CLIENT_ID = "7ef340dd-3d92-4e3f-9b4c-9d62889f4989"
+        self.AZURE_CLIENT_SECRET = "R3n8Q~sUUU190SpcqSEisohpi_-aTfB7Yi1pQdd2"
+        self.AZURE_GROUP_ID = "1c766061-77ce-42d6-aca4-30612864e5f7"
