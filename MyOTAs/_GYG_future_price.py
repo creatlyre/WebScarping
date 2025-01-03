@@ -440,7 +440,7 @@ def check_and_click_only_essential(driver, url):
     """
     try:
         # Wait for the shadow host to appear
-        shadow_host = WebDriverWait(driver, 2).until(
+        shadow_host = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "aside#usercentrics-cmp-ui"))
         )
 
