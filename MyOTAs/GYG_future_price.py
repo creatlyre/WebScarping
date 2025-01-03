@@ -182,24 +182,38 @@ def create_log_done(log_type):
             file.write('Done')
 
 # %%
-def initilize_driver() -> WebDriver:
+def initialize_driver() -> WebDriver:
     try:
-        logger_info.info("Initializing the Chrome driver and logging into the website")
+        logger_info.info("Initializing the Chrome driver and setting up browser preferences")
 
         # Setting up Chrome options
         options = webdriver.ChromeOptions()
+        
+        # Disable logging in the console (optional)
         # options.add_experimental_option('excludeSwitches', ['enable-logging'])
+        
+        # Disable images to speed up loading
         options.add_argument('--blink-settings=imagesEnabled=false')
-
+        
+        # Disable notifications and cookies
+        prefs = {
+            "profile.default_content_setting_values.notifications": 2,  # Disable notifications
+            "profile.default_content_setting_values.cookies": 2         # Block cookies
+        }
+        options.add_experimental_option("prefs", prefs)
+        
         # Initialize the Chrome driver
-        # service = Service()
         driver = webdriver.Chrome(options=options)
         driver.maximize_window()
-        
+
+        # Auto deny or accept cookies using JavaScript injection (optional)
+
+
+        logger_info.info("Chrome driver initialized successfully")
         return driver
 
     except Exception as e:
-        logger_err.error(f"An error occurred during login: {e}")
+        logger_err.error(f"An error occurred while initializing the driver: {e}")
         raise
     
 def quit_driver(driver: WebDriver) -> None:
@@ -437,25 +451,27 @@ def check_for_modal_window_to_close(driver, calendar_picker):
     except:
         driver.execute_script("arguments[0].scrollIntoView(true);", calendar_picker)
         calendar_picker.click()
-
 def check_and_click_only_essential(driver):
+    # NO LONGER WORKING CHANGED TO REMOVE COOKIES IN INITALIZE DRIVER
+    # Attempt to find the cookie banner with an extended wait
     try:
-        # Wait until the cookie banner is visible
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, ".ot-sdk-container"))
+        shadow_host = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "div.cmp-wrapper"))
         )
-        
-        # Check if the "Only Essential" button is present
-        only_essential_button = driver.find_element(By.ID, "onetrust-reject-all-handler")
-        
-        if only_essential_button:
-            # Click the "Only Essential" button
+        print("Found 'div.cmp-wrapper' in the main document.")
+    
+        shadow_root = driver.execute_script("return arguments[0].shadowRoot", shadow_host)
+        if shadow_root:
+            only_essential_button = shadow_root.find_element(By.CSS_SELECTOR, "button.uc-deny-button")
             only_essential_button.click()
             print("Clicked 'Only Essential'.")
-        else:
-            print("'Only Essential' button not found.")
+            return
+
     except Exception as e:
-        print(f"An error occurred: {e}")
+        print("An error occurred:")
+        print(e)
+        print("Detailed traceback:")
+        print(traceback.format_exc())
 # %%
 def get_future_price(driver, url, viewer, language, adults_amount,  max_days_to_complete):
     logger_info.info(f"Adults amount: {adults_amount}")
@@ -531,8 +547,8 @@ def get_future_price(driver, url, viewer, language, adults_amount,  max_days_to_
             url = url.replace(start_collection_date, max_date_done.strftime('%Y-%m-%d'))
             driver.get(url)
     #     VERIFY IF THE CURRENCY IS CORRECT
-    login_button = WebDriverWait(driver, 60).until(EC.element_to_be_clickable((By.XPATH, "//a[@title='Profile']")))
-    login_button.click()
+    # login_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//a[@title='Profile']")))
+    # login_button.click()
 
     # currency_switcher_button = WebDriverWait(driver, 60).until(EC.element_to_be_clickable((By.XPATH, "//a[@class='option option-currency']")))
 
@@ -562,7 +578,7 @@ def get_future_price(driver, url, viewer, language, adults_amount,  max_days_to_
             return 
         # continue
     time.sleep(2)
-    check_and_click_only_essential(driver)
+    # check_and_click_only_essential(driver)
     driver.execute_script("arguments[0].click();", button_check_availability)
     
 
@@ -960,7 +976,7 @@ config_reader = ConfigReader(file_manager__config_path.config_file_path)
 urls = config_reader.get_urls_by_ota(site)
 
 define_logging()
-driver = initilize_driver()
+driver = initialize_driver()
 combinations = set()
 for item in urls:
     url = item['url']

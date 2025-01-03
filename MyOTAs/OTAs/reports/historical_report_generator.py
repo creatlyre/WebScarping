@@ -129,7 +129,18 @@ class HistoricalReportGenerator:
         except Exception as e:
             logging.error(f"Error checking table existence: {str(e)}")
             return False
+    def extract_uid(self, url):
 
+        if 'getyourguide' in url.lower():
+            uid = url.lower().split('getyourguide')[-1].split('-')[-1].replace('/','')
+        elif 'viator' in url.lower():
+            uid = url.lower().split('viator')[-1].split('/')[-1].replace('/','')
+        elif 'musement' in url.lower():
+            uid = url.lower().split('musement')[-1].split('-')[-1].replace('/','')
+        else:
+            return None  # Return None if no pattern matches
+        return uid
+    
     def fetch_data(self, table_name, url, date_filter=None):
         """
         Fetches historical data for the given URL from the specified table, including Kategoria and Pozycja.
@@ -151,12 +162,17 @@ class HistoricalReportGenerator:
                                 "AND [Data zestawienia] < DATEFROMPARTS(YEAR(GETDATE()), ((MONTH(GETDATE())-1)/3 + 1)*3 + 1, 1)",
             'last_week': "[Data zestawienia] >= DATEADD(DAY, -7, GETDATE())",
 
-            'last_year': "[Data zestawienia] >= DATEADD(DAY, -365, GETDATE())",
+            'last_year_to_date': "[Data zestawienia] >= DATEADD(DAY, -365, GETDATE())",
+
+            'last_year': "[Data zestawienia] >= DATEFROMPARTS(YEAR(GETDATE()) - 1, 1, 1) AND [Data zestawienia] < DATEFROMPARTS(YEAR(GETDATE()), 1, 1)"
+
         }
 
         # Determine the date filter condition
         date_filter_condition = date_conditions.get(date_filter, "")
-
+        uid = self.extract_uid(url)
+        if not uid:
+            raise ValueError(f"UID could not be extracted from the URL: {url}")
         # Build the query with dynamic date filtering if provided
         query = f"""
         SELECT 
@@ -174,7 +190,7 @@ class HistoricalReportGenerator:
         FROM 
             {table_name}
         WHERE 
-            [Tytul Url] = ? 
+             [Tytul Url] LIKE '%{uid}%'
             {f"AND {date_filter_condition}" if date_filter_condition else ""}
         ORDER BY 
             [Data zestawienia] ASC
@@ -182,7 +198,7 @@ class HistoricalReportGenerator:
 
         try:
             # Execute the query with the URL parameter
-            df = pd.read_sql_query(query, self.cnxn, params=(url,))
+            df = pd.read_sql_query(query, self.cnxn)
             if df.empty:
                 logging.warning("No data found for the provided URL.")
                 return None
@@ -570,7 +586,7 @@ class HistoricalReportGenerator:
 
         # Package MoM Insights into review_stats
         review_stats = {
-            'Average Review Increase per Day': average_review_increase_per_day,
+            'Average Review Increase per Day': round(average_review_increase_per_day, 2),
             'MoM Average Review Increase (%)': average_mom_review_increase,
             'MoM Highest Review Increase (%)': highest_mom_review_increase,
             'Month with Highest MoM Review Increase': month_highest_mom_review_increase
@@ -814,7 +830,7 @@ class HistoricalReportGenerator:
             f"<h3>Key Insights:</h3>\n"
             f"<ul>\n"
             f"  <li>The tour has an average price of <strong>€{summary['Average Price']:.2f}</strong>, with a median price of <strong>€{summary['Median Price']:.2f}</strong>.</li>\n"
-            f"  <li>There is an average increase of <strong>{review_stats['Average Review Increase per Day']} reviews per day</strong> in the primary category.</li>\n"
+            f"  <li>There is an average increase of <strong>{review_stats['Average Review Increase per Day']} reviews per day</strong>.</li>\n"
         )
 
         if review_stats['MoM Highest Review Increase (%)'] is not None:
@@ -1205,8 +1221,8 @@ class HistoricalReportGenerator:
             toc_sections.append("Insight Summary")
         if plots:
             toc_sections.append("Charts and Analysis")
-        if conclusion_text:
-            toc_sections.append("Conclusion and Recommendations")
+        # if conclusion_text:
+        #     toc_sections.append("Conclusion and Recommendations")
 
         if toc_sections:
             for section in toc_sections:
@@ -1252,12 +1268,12 @@ class HistoricalReportGenerator:
         """
 
         # Conclusion Section
-        if conclusion_text:
-            html += f"""    <section id="conclusion-and-recommendations">
-            <h2>Conclusion and Recommendations</h2>
-            <p>{conclusion_text}</p>
-        </section>
-        """
+        # if conclusion_text:
+        #     html += f"""    <section id="conclusion-and-recommendations">
+        #     <h2>Conclusion and Recommendations</h2>
+        #     <p>{conclusion_text}</p>
+        # </section>
+        # """
 
         # Footer with Updated Structure
         html += f"""<footer>
