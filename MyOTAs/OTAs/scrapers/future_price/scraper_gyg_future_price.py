@@ -24,6 +24,8 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import Select
+from selenium.webdriver.chrome.webdriver import WebDriver
+from selenium import webdriver
 
 class ScraperGYGFuturePrice(ScraperGYG):
     """
@@ -36,6 +38,40 @@ class ScraperGYGFuturePrice(ScraperGYG):
         self.language = language
         self.extraction_date = datetime.datetime.now().strftime('%Y-%m-%d %H:00:00')
         self.extraction_date_save_format = f"{self.extraction_date.replace(' ', '_').replace(':','-')}_{self.language}_{self.adults}"
+
+    def initialize_driver(self) -> WebDriver:
+        try:
+            self.logger.logger_info.info("Initializing the Chrome driver and setting up browser preferences")
+
+            # Setting up Chrome options
+            options = webdriver.ChromeOptions()
+            
+            # Disable logging in the console (optional)
+            # options.add_experimental_option('excludeSwitches', ['enable-logging'])
+            
+            # Disable images to speed up loading
+            options.add_argument('--blink-settings=imagesEnabled=false')
+            
+            # Disable notifications and cookies
+            prefs = {
+                "profile.default_content_setting_values.notifications": 2,  # Disable notifications
+                "profile.default_content_setting_values.cookies": 2         # Block cookies
+            }
+            options.add_experimental_option("prefs", prefs)
+            
+            # Initialize the Chrome driver
+            driver = webdriver.Chrome(options=options)
+            driver.maximize_window()
+
+            # Auto deny or accept cookies using JavaScript injection (optional)
+
+
+            self.logger.logger_info.info("Chrome driver initialized successfully")
+            return driver
+
+        except Exception as e:
+            self.logger.logger_err.info(f"An error occurred while initializing the driver: {e}")
+            raise
 
     def handle_error_and_rerun(self, error):
         """

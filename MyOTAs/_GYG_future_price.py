@@ -68,28 +68,41 @@ class Config:
         self.archive_folder = os.path.join(self.output_gyg, 'Archive')
 
 
-def initilize_driver():
-    """
-    Initialize the Selenium WebDriver.
-    """
+def initialize_driver() -> WebDriver:
+    global clicked_cookies_essentials
     try:
-        logger.logger_info.info("Initializing the Chrome driver.")
+        clicked_cookies_essentials = False
+        logger.logger_info.info("Initializing the Chrome driver and setting up browser preferences")
+
         # Setting up Chrome options
         options = webdriver.ChromeOptions()
+        
+        # Disable logging in the console (optional)
+        # options.add_experimental_option('excludeSwitches', ['enable-logging'])
+        
+        # Disable images to speed up loading
         options.add_argument('--blink-settings=imagesEnabled=false')
-        options.add_argument('--no-sandbox')
-        options.add_argument('--disable-dev-shm-usage')
-
+        
+        # Disable notifications and cookies
+        prefs = {
+            "profile.default_content_setting_values.notifications": 2,  # Disable notifications
+            # "profile.default_content_setting_values.cookies": 2         # Block cookies
+        }
+        options.add_experimental_option("prefs", prefs)
+        
         # Initialize the Chrome driver
         driver = webdriver.Chrome(options=options)
         driver.maximize_window()
-        logger.logger_done.info("Chrome driver initialized successfully.")
+
+        # Auto deny or accept cookies using JavaScript injection (optional)
+
+
+        logger.logger_info.info("Chrome driver initialized successfully")
         return driver
 
     except Exception as e:
-        logger.logger_err.error(f"An error occurred during driver initialization: {e}")
+        logger.logger_err.error(f"An error occurred while initializing the driver: {e}")
         raise
-
 
 def quit_driver(driver):
     """
@@ -239,7 +252,9 @@ def get_future_price(driver, url, viewer, language, adults_amount, max_days_to_c
                 driver.get(full_url)
 
         change_currency(driver, url)
-        check_and_click_only_essential(driver, url)
+
+        if not clicked_cookies_essentials:
+            check_and_click_only_essential(driver, url)
 
         activity_title = get_activity_title(driver, url)
         if not activity_title:
@@ -252,7 +267,6 @@ def get_future_price(driver, url, viewer, language, adults_amount, max_days_to_c
 
         time.sleep(2)
         driver.execute_script("arguments[0].click();", check_availability_button)
-
         # Handle potential date unavailability
         try:
             WebDriverWait(driver, 5).until(EC.visibility_of_element_located((By.CLASS_NAME, 'dayContainer')))
@@ -302,7 +316,7 @@ def get_future_price(driver, url, viewer, language, adults_amount, max_days_to_c
             month = months[month_index]
             current_month = driver.find_elements(By.CLASS_NAME, "flatpickr-current-month")[month_index].text.strip()
 
-            if current_month == "January":
+            if current_month == "January" and datetime.datetime.now().month != 1: 
                 current_year += 1
 
             days_to_complete = []
@@ -398,11 +412,6 @@ def change_currency(driver, url):
     Change currency to Euro if not already set.
     """
     try:
-        # Click on the profile icon to open the dropdown
-        profile_button = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.XPATH, "//a[@title='Profile']"))
-        )
-        profile_button.click()
 
         currency_selector = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, 'select[id="footer-currency-selector"]'))
@@ -412,7 +421,7 @@ def change_currency(driver, url):
         current_currency = selected_option.text.strip()
         logger.logger_info.info(f"Current currency: {current_currency}")
 
-        if "EUR" not in current_currency:
+        if "eur" not in current_currency.lower():
             desired_currency_text = 'Euro (€)'
             select.select_by_visible_text(desired_currency_text)
             logger.logger_info.info(f"Currency changed to {desired_currency_text}")
@@ -424,27 +433,38 @@ def change_currency(driver, url):
 
 
 def check_and_click_only_essential(driver, url):
+    global clicked_cookies_essentials
+    
     """
-    Handle the cookie consent popup by clicking 'Only Essential'.
+    Handle the cookie consent popup inside a shadow DOM by clicking 'Only Essential'.
     """
     try:
-        # Wait for the cookie consent popup to appear
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, ".ot-sdk-container"))
+        # Wait for the shadow host to appear
+        shadow_host = WebDriverWait(driver, 2).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "aside#usercentrics-cmp-ui"))
         )
-        # Attempt to find and click the 'Only Essential' button
-        only_essential_button = driver.find_element(By.ID, "onetrust-reject-all-handler")
+
+        # Access the shadow root
+        shadow_root = driver.execute_script("return arguments[0].shadowRoot", shadow_host)
+
+        # Attempt to find and click the 'Only Essential' button inside the shadow root
+        only_essential_button = shadow_root.find_element(By.CSS_SELECTOR, "button#deny")
         if only_essential_button:
             only_essential_button.click()
             logger.logger_info.info("Clicked 'Only Essential' on cookie consent.")
+            clicked_cookies_essentials = True
+
     except TimeoutException:
-        # Log if the popup is not found within the wait period
-        logger.logger_info.info("Cookie consent popup not found.")
+        # Log if the shadow host is not found within the wait period
+        logger.logger_info.info("Cookie consent shadow host not found.")
+
     except NoSuchElementException:
         # Log as information if the button is not found
-        logger.logger_info.info("The 'Only Essential' button was not found.")
+        logger.logger_info.info("The 'Only Essential' button was not found in the shadow DOM.")
+
     except Exception as e:
-            logger.logger_err.error(f"An unexpected error occurred while handling cookie consent for URL {url}: {e}")
+        # Log any unexpected errors
+        logger.logger_err.error(f"An unexpected error occurred while handling cookie consent for URL {url}: {e}")
 
 
 
@@ -696,7 +716,7 @@ def main():
         urls = config_reader.get_urls_by_ota(SITE)
         logger = LoggerManagerFuturePrice(file_manager, 'gyg_future_price')
 
-        driver = initilize_driver()
+        driver = initialize_driver()
         combinations = set()
         for item in urls:
             url = item['url']

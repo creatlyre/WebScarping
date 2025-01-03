@@ -21,14 +21,14 @@ def main():
     # Load the link file path from FilePathManager
     temp_file_manager = FilePathManagerFuturePrice(site, city, adults='2', language='en')
     link_file_path = temp_file_manager.link_file_path
-
+    temp_logger = LoggerManagerFuturePrice(temp_file_manager)
     with open(link_file_path) as f:
         config = json.load(f)
 
     combinations = set()
     try:
         # Initialize the scraper and driver
-        scraper = ScraperGYGFuturePrice("", "", {}, temp_file_manager, None)
+        scraper = ScraperGYGFuturePrice("N/A", "N/A", {}, temp_file_manager, temp_logger)
         scraper.driver = scraper.initialize_driver()
 
         for site_info in config['urls']:
