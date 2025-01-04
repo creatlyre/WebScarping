@@ -283,7 +283,7 @@ class ConfigReader:
         return days.get(day_name.lower(), -1)
     
 
-    def add_url(self, ota: str, url: str, viewer: str, configurations: List[Dict[str, Any]]):
+    def add_url(self, ota: str, url: str, viewer: str, city: str, configurations: List[Dict[str, Any]]):
         """
         Add a new URL configuration under a specific OTA.
         """
@@ -296,6 +296,7 @@ class ConfigReader:
                 print(f"URL '{url}' already exists under OTA '{ota}'. Adding configurations.")
                 # Update viewer if needed
                 url_entry['viewer'] = viewer
+                url_entry['city'] = city
                 for new_config in configurations:
                     self.add_or_update_configuration(url_entry, new_config)
                 return
@@ -303,6 +304,7 @@ class ConfigReader:
         new_url_entry = {
             'url': url,
             'viewer': viewer,
+            'city': city,
             'configurations': configurations
         }
         ota_entry['urls'].append(new_url_entry)
@@ -339,7 +341,7 @@ class ConfigReader:
             print(f"URL '{url}' not found under OTA '{ota}'.")
 
 
-    def update_url(self, ota: str, url: str, viewer: str, configurations: List[Dict[str, Any]]):
+    def update_url(self, ota: str, url: str, viewer: str, city: str, configurations: List[Dict[str, Any]]):
         """
         Update an existing URL configuration under a specific OTA.
         """
@@ -351,6 +353,7 @@ class ConfigReader:
         for url_entry in ota_entry['urls']:
             if url_entry['url'] == url:
                 url_entry['viewer'] = viewer
+                url_entry['city'] = city
                 for new_config in configurations:
                     self.add_or_update_configuration(url_entry, new_config)
                 print(f"Updated URL '{url}' under OTA '{ota}'.")
@@ -442,6 +445,7 @@ class ConfigReader:
                     ota = ota.strip()
                     url = url.strip()
                     viewer = group['Viewer'].iloc[0].strip()
+                    city = group['City'].iloc[0].strip()
                     adults = int(adults) if not pd.isna(adults) else None
                     language = language.strip() if not pd.isna(language) else None
                     # Aggregate schedules
@@ -473,9 +477,9 @@ class ConfigReader:
                     configurations = [configuration]
                     # Call add_url or update_url
                     if action == 'add':
-                        self.add_url(ota=ota, url=url, viewer=viewer, configurations=configurations)
+                        self.add_url(ota=ota, url=url, viewer=viewer, city=city, configurations=configurations)
                     elif action == 'update':
-                        self.update_url(ota=ota, url=url, viewer=viewer, configurations=configurations)
+                        self.update_url(ota=ota, url=url, viewer=viewer, city=city, configurations=configurations)
                     # Mark all related rows as Done
                     indices = group.index
                     df.loc[indices, 'Done'] = True

@@ -550,15 +550,19 @@ class HistoricalReportGenerator:
         else:
             booked_summary = None
 
-        # Analyze Reviews Increase per Month based on Primary Category
+      # Analyze Reviews Increase per Month based on Primary Category
         df_primary.set_index('Data zestawienia', inplace=True)
         reviews_monthly_primary = df_primary['IloscOpini'].resample('ME').sum().reset_index()
         reviews_monthly_primary.rename(columns={'IloscOpini': 'Total Reviews'}, inplace=True)
-        reviews_monthly_primary['Review_Increase'] = reviews_monthly_primary['Total Reviews'].pct_change().fillna(0) * 100  # Percentage Change
+
+        # Custom percentage change calculation to handle zero division
+        reviews_monthly_primary['Review_Increase'] = reviews_monthly_primary['Total Reviews'].diff() / reviews_monthly_primary['Total Reviews'].shift(1)
+        reviews_monthly_primary['Review_Increase'] = reviews_monthly_primary['Review_Increase'].fillna(0).replace([float('inf'), -float('inf')], None) * 100
 
         # Insights for Reviews MoM
         average_mom_review_increase = reviews_monthly_primary['Review_Increase'].mean()
         highest_mom_review_increase = reviews_monthly_primary['Review_Increase'].max()
+
         if not reviews_monthly_primary['Review_Increase'].isnull().all():
             month_highest_mom_review_increase = reviews_monthly_primary.loc[reviews_monthly_primary['Review_Increase'].idxmax(), 'Data zestawienia'].date()
         else:
@@ -567,18 +571,47 @@ class HistoricalReportGenerator:
 
         # Analyze Bookings MoM if booked_summary exists
         if booked_summary:
+            # Resample and calculate monthly bookings
             bookings_monthly_primary = df_primary['Booked'].resample('M').sum().reset_index()
             bookings_monthly_primary.rename(columns={'Booked': 'Total Bookings'}, inplace=True)
-            bookings_monthly_primary['Booking_Increase'] = bookings_monthly_primary['Total Bookings'].pct_change().fillna(0) * 100  # Percentage Change
+
+            # Custom percentage change calculation to handle zero division
+            bookings_monthly_primary['Booking_Increase'] = (
+                (bookings_monthly_primary['Total Bookings'].diff()) / bookings_monthly_primary['Total Bookings'].shift(1)
+            )
+            bookings_monthly_primary['Booking_Increase'] = (
+                bookings_monthly_primary['Booking_Increase']
+                .replace([float('inf'), -float('inf')], None)  # Replace inf values with None
+                .fillna(0)  # Replace NaN with 0
+                * 100  # Convert to percentage
+            )
 
             # Insights for Bookings MoM
             average_mom_booking_increase = bookings_monthly_primary['Booking_Increase'].mean()
             highest_mom_booking_increase = bookings_monthly_primary['Booking_Increase'].max()
+            
             if not bookings_monthly_primary['Booking_Increase'].isnull().all():
-                month_highest_mom_booking_increase = bookings_monthly_primary.loc[bookings_monthly_primary['Booking_Increase'].idxmax(), 'Data zestawienia'].date()
+                month_highest_mom_booking_increase = bookings_monthly_primary.loc[
+                    bookings_monthly_primary['Booking_Increase'].idxmax(), 'Data zestawienia'
+                ].date()
             else:
                 highest_mom_booking_increase = None
                 month_highest_mom_booking_increase = None
+
+            # Add booking insights to booked_summary only if MoM increase is positive
+            if highest_mom_booking_increase is not None and highest_mom_booking_increase > 0:
+                booked_summary.update({
+                    'MoM Average Booking Increase (%)': average_mom_booking_increase,
+                    'MoM Highest Booking Increase (%)': highest_mom_booking_increase,
+                    'Month with Highest MoM Booking Increase': month_highest_mom_booking_increase
+                })
+            else:
+                # Add default values to avoid KeyError
+                booked_summary.update({
+                    'MoM Average Booking Increase (%)': None,
+                    'MoM Highest Booking Increase (%)': None,
+                    'Month with Highest MoM Booking Increase': None
+                })
         else:
             average_mom_booking_increase = None
             highest_mom_booking_increase = None
@@ -591,14 +624,6 @@ class HistoricalReportGenerator:
             'MoM Highest Review Increase (%)': highest_mom_review_increase,
             'Month with Highest MoM Review Increase': month_highest_mom_review_increase
         }
-
-        # Package Bookings MoM Insights into booked_summary if bookings exist
-        if booked_summary:
-            booked_summary.update({
-                'MoM Average Booking Increase (%)': average_mom_booking_increase,
-                'MoM Highest Booking Increase (%)': highest_mom_booking_increase,
-                'Month with Highest MoM Booking Increase': month_highest_mom_booking_increase
-            })
 
         # Additional Insights: Price Distribution
         plt.figure(figsize=(10, 6))
@@ -1383,7 +1408,7 @@ class HistoricalReportGenerator:
 
     # ----------------------------- Main Execution -----------------------------
 
-    def run_report(self, url, date_filter=None):
+    def run_report(self, url, viewer = None, date_filter=None):
         """
         Main method to run the report generation process for a given URL.
         """
@@ -1453,7 +1478,10 @@ class HistoricalReportGenerator:
             report_title = df['Tytul'].iloc[0] if not df['Tytul'].isnull().all() else "Historical Summary Report"
 
             # Generate PDF file name based on 'Tytul'
-            output_filename = "PDF_reports/" + self.sanitize_filename(report_title) + '.pdf'
+            if viewer:
+                output_filename = f"PDF_reports/" + viewer + "_" + self.sanitize_filename(report_title) + '.pdf'
+            else:
+                output_filename = "PDF_reports/" + self.sanitize_filename(report_title) + '.pdf'
 
             # Prepare introduction text
             introduction_text = (

@@ -121,7 +121,7 @@ def save_and_erase_dataframe(df, url_city_id, url_unique_identifier, config):
     """
     try:
         file_path = os.path.join(config.output_gyg, f'{config.extraction_date_save_format}-{url_city_id}-GYG.csv')
-        df['city'] = url_city_id.split('-')[0]
+        df['city'] = url_city_id
         df['uid'] = url_unique_identifier
         df.to_csv(file_path, header=not os.path.exists(file_path), index=False, mode='a')
         logger.logger_done.info(f'Successfully saved {len(df)} rows to {file_path}')
@@ -206,7 +206,7 @@ def process_days_not_available(activity_title, language, adults_amount, option_d
         raise
 
 
-def get_future_price(driver, url, viewer, language, adults_amount, max_days_to_complete, config):
+def get_future_price(driver, url, viewer, city, language, adults_amount, max_days_to_complete, config):
     """
     Main function to get future prices from the website.
     """
@@ -216,7 +216,7 @@ def get_future_price(driver, url, viewer, language, adults_amount, max_days_to_c
 
         url_id = url
         url_unique_identifier = url.split('.com/')[-1].split('-')[ -1].replace('/', '')
-        url_city_id = url.split('.com/')[-1].split('/')[0]
+        url_city_id = city
 
         start_collection_date = config.date_today
         date_today_obj = datetime.datetime.strptime(start_collection_date, "%Y-%m-%d")
@@ -674,13 +674,13 @@ def should_run_today(day, month_length, frequency):
     return False
 
 
-def check_if_today_done_on_schedule_in_csv(url, config):
+def check_if_today_done_on_schedule_in_csv(url, city, config):
     """
     Check if today's data for the given URL has already been processed.
     """
     try:
         url_unique_identifier = url.split('.com/')[-1].split('-')[-1].replace('/', '')
-        url_city_id = url.split('.com/')[-1].split('/')[0]
+        url_city_id = city
 
         date_part = config.extraction_date_save_format.split('_')[0]
         fixed_part = config.extraction_date_save_format.split('_', 2)[2]
@@ -721,6 +721,7 @@ def main():
         for item in urls:
             url = item['url']
             viewer = item['viewer']
+            city = item['city']
             for cfg in item['configurations']:
                 adults = cfg['adults']
                 language = cfg['language']
@@ -732,12 +733,12 @@ def main():
                     continue
 
                 config = Config(adults, language)
-                today_file_in_archive = check_if_today_done_on_schedule_in_csv(url, config)
+                today_file_in_archive = check_if_today_done_on_schedule_in_csv(url, city, config)
                 if today_file_in_archive:
                     logger.logger_done.info(f"Data already processed for URL: {url}, Adults: {adults}, Language: {language}")
                 else:
                     logger.logger_done.info(f"Processing URL: {url}, Adults: {adults}, Language: {language}, Frequency: {frequency}, Max Days: {max_days}")
-                    get_future_price(driver, url, viewer, language, adults, max_days, config)
+                    get_future_price(driver, url, viewer, city, language, adults, max_days, config)
                     combinations.add((adults, language))
 
         quit_driver(driver)
