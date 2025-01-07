@@ -15,6 +15,7 @@ import time
 from PIL import Image
 import logging
 import sys
+from scipy.stats import zscore
 
 # Set the current directory to the script location
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -47,12 +48,25 @@ class HistoricalReportGenerator:
     # Path to wkhtmltopdf executable
     WKHTMLTOPDF_PATH = r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe'  # Update this path if different
 
-    def __init__(self, username, password, logo_path='reports\logo_color.png'):
+    def __init__(self, username, password, city=None, ota=None,logo_path='reports\logo_color.png'):
         self.USERNAME = username
         self.PASSWORD = password
         self.cnxn = None
         self.logo_path = os.path.join(project_root, logo_path)
         self.logo_base64 = self.load_logo_base64()
+        # Set default currency
+        self.currency = '€'
+        self.ota = ota
+        # Dynamic currency mapping based on city
+        self.city_currency_map = {
+            'london': '£',
+            'las vegas': '$',
+            # Add more cities and their currencies as needed
+        }
+        
+        # Update currency based on city
+        if city and isinstance(city, str):
+            self.currency = self.city_currency_map.get(city.lower(), self.currency)
 
         self.overview = []  # Store a brief summary for external use
 
@@ -147,7 +161,7 @@ class HistoricalReportGenerator:
         Applies date filtering based on the provided date_filter parameter.
         """
         # Clean the table name to prevent SQL injection (basic sanitization)
-        if not re.match(r'^[\w\.\[\]]+$', table_name):
+        if not re.match(r'^[\w\.\[\]\-]+$', table_name):
             logging.error("Invalid table name provided.")
             return None
 
@@ -186,9 +200,10 @@ class HistoricalReportGenerator:
             [Miasto],
             [Booked],
             [Kategoria],
-            [Pozycja]
+            [Pozycja],
+            [Przecena]
         FROM 
-            {table_name}
+            [{table_name}]
         WHERE 
              [Tytul Url] LIKE '%{uid}%'
             {f"AND {date_filter_condition}" if date_filter_condition else ""}
@@ -249,15 +264,15 @@ class HistoricalReportGenerator:
             change_freq_desc = f"There have been only {change_frequency} major price changes during the observed period, indicating long periods of price stability."
 
         # Magnitude of largest price change
-        largest_change_desc = f"The most significant price change was €{price_diff:.2f} ({price_diff_percentage:.2f}%) on {price_change_date}, which may reflect a major market shift or promotional event."
+        largest_change_desc = f"The most significant price change was {self.currency}{price_diff:.2f} ({price_diff_percentage:.2f}%) on {price_change_date}, which may reflect a major market shift or promotional event."
 
         # Calculate the cumulative price change over the period
         cumulative_price_change = df_primary['Cena'].iloc[-1] - df_primary['Cena'].iloc[0]
         cumulative_percentage_change = (cumulative_price_change / df_primary['Cena'].iloc[0]) * 100 if df_primary['Cena'].iloc[0] != 0 else 0
         if cumulative_price_change > 0:
-            cumulative_change_desc = f"Over the entire period, there was a cumulative price increase of €{cumulative_price_change:.2f} ({cumulative_percentage_change:.2f}%)."
+            cumulative_change_desc = f"Over the entire period, there was a cumulative price increase of {self.currency}{cumulative_price_change:.2f} ({cumulative_percentage_change:.2f}%)."
         elif cumulative_price_change < 0:
-            cumulative_change_desc = f"Over the entire period, there was a cumulative price decrease of €{abs(cumulative_price_change):.2f} ({abs(cumulative_percentage_change):.2f}%)."
+            cumulative_change_desc = f"Over the entire period, there was a cumulative price decrease of {self.currency}{abs(cumulative_price_change):.2f} ({abs(cumulative_percentage_change):.2f}%)."
         else:
             cumulative_change_desc = "The price remained unchanged over the entire period."
 
@@ -300,16 +315,16 @@ class HistoricalReportGenerator:
             trend_desc = "Trend analysis indicates that prices have remained stable over the period, suggesting steady market conditions."
 
         # Determine price volatility description
-        volatility_desc = f"Price volatility, measured by a standard deviation of €{price_std:.2f}, indicates {'low' if price_std < 1 else 'high'} variability in pricing."
+        volatility_desc = f"Price volatility, measured by a standard deviation of {self.currency}{price_std:.2f}, indicates {'low' if price_std < 1 else 'high'} variability in pricing."
 
         # Generate dynamic description for 'Price Over Time' chart
         price_over_time_desc = (
             f"This chart illustrates how the price of the tour has evolved over time in the primary category, covering the period from {first_price_date} to {last_price_date}. "
-            f"Throughout this timeframe, the price fluctuated between a low of €{price_min:.2f} and a high of €{price_max:.2f}, averaging €{price_mean:.2f}. "
+            f"Throughout this timeframe, the price fluctuated between a low of {self.currency}{price_min:.2f} and a high of {self.currency}{price_max:.2f}, averaging {self.currency}{price_mean:.2f}. "
             f"{largest_change_desc} {cumulative_change_desc} "
             f"{trend_desc} "
             f"{volatility_desc} "
-            f"An analysis of monthly averages reveals that the highest average price occurred in {month_with_highest_price.strftime('%B %Y')}, reaching €{highest_avg_price:.2f}, while the lowest was in {month_with_lowest_price.strftime('%B %Y')}, at €{lowest_avg_price:.2f}. "
+            f"An analysis of monthly averages reveals that the highest average price occurred in {month_with_highest_price.strftime('%B %Y')}, reaching {self.currency}{highest_avg_price:.2f}, while the lowest was in {month_with_lowest_price.strftime('%B %Y')}, at {self.currency}{lowest_avg_price:.2f}. "
             f"This suggests potential seasonal trends or market dynamics influencing pricing. "
             f"{price_stability_desc} {change_freq_desc} {stability_duration_desc} {seasonality_desc}"
         )
@@ -324,8 +339,40 @@ class HistoricalReportGenerator:
         Ensures deduplication based on 'Kategoria', 'Tytul Url', and 'Data zestawienia' to avoid duplicates.
         """
         # Handle 'Cena' (Price): Remove currency symbols and convert to float
-        df['Cena'] = df['Cena'].replace({'€': '', ',': '', ' ': ''}, regex=True)
+        df['Cena'] = df['Cena'].replace({'€': '', '$': '', '£': '', ',': '', ' ': ''}, regex=True)
         df['Cena'] = pd.to_numeric(df['Cena'], errors='coerce')
+        df = df.dropna(subset=['Cena'])
+        # Check if the 'Przecena' column exists
+        if 'Przecena' in df.columns:
+            # Replace unwanted characters in 'Przecena' if the column is not empty
+            if not df['Przecena'].empty:
+                df['Przecena'] = df['Przecena'].fillna("").replace({'€': '', '$': '', '£': '', ',': '', ' ': ''}, regex=True)
+                df['Przecena'] = pd.to_numeric(df['Przecena'], errors='coerce')
+
+            else:
+                logging.warning("'Przecena' column is empty.")
+
+        # Clean Viator extreme prices
+        # Use IQR to remove systematic outliers in 'Cena'
+
+        if 'Tytul Url' in df.columns and df['Tytul Url'].str.contains("viator", na=False, case=False).any():
+            logging.info("Processing data for Viator...")           
+            Q1 = df['Cena'].quantile(0.25)
+            Q3 = df['Cena'].quantile(0.75)
+            IQR = Q3 - Q1
+            lower_bound = Q1 - 1.75 * IQR
+            upper_bound = Q3 + 1.75 * IQR
+            # Filter rows within the acceptable range
+            df = df[(df['Cena'] >= lower_bound) & (df['Cena'] <= upper_bound)]
+        else:
+            Q1 = df['Cena'].quantile(0.25)
+            Q3 = df['Cena'].quantile(0.75)
+            IQR = Q3 - Q1
+            lower_bound = Q1 - 2.5 * IQR
+            upper_bound = Q3 + 2.5 * IQR
+            # Filter rows within the acceptable range
+            df = df[(df['Cena'] >= lower_bound) & (df['Cena'] <= upper_bound)]
+
         df['IloscOpini'] = df['IloscOpini'].replace(',', '')
 
         # Handle 'IloscOpini' (Number of Reviews): Extract numeric value
@@ -393,6 +440,15 @@ class HistoricalReportGenerator:
             df['Pozycja'] = pd.to_numeric(df['Pozycja'], errors='coerce')
         else:
             df['Pozycja'] = None
+        
+        # Create a flag column to mark discounted records
+        df['IsDiscount'] = 0
+        df['Cena_Original'] = df['Cena']
+
+        # Wherever 'Przecena' is not null (and not empty), replace 'Cena' with 'Przecena' and set the discount flag
+        mask_przecena = df['Przecena'].notna() & (df['Przecena'] != "")
+        df.loc[mask_przecena, 'Cena'] = df.loc[mask_przecena, 'Przecena']
+        df.loc[mask_przecena, 'IsDiscount'] = 1
 
         # Convert 'Data zestawienia' to datetime
         df['Data zestawienia'] = pd.to_datetime(df['Data zestawienia'], errors='coerce')
@@ -414,13 +470,18 @@ class HistoricalReportGenerator:
         """
         Performs analysis on the DataFrame and returns summary statistics, plots, and chart explanations.
         """
+        
+        # 3. Count how many discounted days there are in the selected time range
+        discounted_days = df.groupby('Data zestawienia')['IsDiscount'].max().sum()
+
         summary = {
             'Total Records': len(df),
             'Date Range': f"{df['Data zestawienia'].min().date()} to {df['Data zestawienia'].max().date()}",
             'Average Price': df['Cena'].mean(),
             'Median Price': df['Cena'].median(),
             'Average Number of Reviews': df['IloscOpini'].mean(),
-            'Total Reviews': df['IloscOpini'].max()  # Changed to sum for total reviews
+            'Total Reviews': df['IloscOpini'].max(),  # Changed to sum for total reviews
+            'Discounted Days': discounted_days
         }
 
         logging.info("\nSummary Statistics:")
@@ -464,7 +525,7 @@ class HistoricalReportGenerator:
         sns.lineplot(data=df_primary, x='Data zestawienia', y='Cena', marker='o', color='#00AEEF')  # PRIMARY_BLUE
         plt.title('Price Over Time', color='#0073B1')  # DARK_BLUE
         plt.xlabel('Date')
-        plt.ylabel('Price (€)')
+        plt.ylabel(f'Price ({self.currency})')
         plt.gca().xaxis.set_major_locator(mdates.MonthLocator(interval=1))
         plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
         plt.xticks(rotation=45, ha='right')
@@ -476,6 +537,48 @@ class HistoricalReportGenerator:
         plots['Price Over Time'] = Image.open(price_over_time_img)
 
         price_over_time_desc = self.generate_dynamic_explanations_price_over_time(df_primary)
+
+        # Plot Discounted Price 
+
+        df_discounted = df[df['IsDiscount'] == 1].copy()
+        if not df_discounted.empty:
+            # Calculate the discount difference
+            df_discounted['Discount_Amount'] = df_discounted['Cena_Original'] - df_discounted['Cena']
+
+            # Create the figure and axes for the line chart
+            fig, ax = plt.subplots(figsize=(10, 6))
+            sns.lineplot(
+                data=df_discounted,
+                x='Data zestawienia',
+                y='Discount_Amount',
+                marker='o',
+                color='purple',
+                ax=ax
+            )
+
+            # Chart styling
+            ax.set_title('Discount Amount Over Time')
+            ax.set_xlabel('Date')
+            ax.set_ylabel(f'Discount Amount ({self.currency})')
+            plt.xticks(rotation=45, ha='right')
+            plt.tight_layout()
+
+            # Save the plot as an image and store in 'plots'
+            discount_plot_img = BytesIO()
+            plt.savefig(discount_plot_img, format='PNG')
+            plt.close(fig)
+            discount_plot_img.seek(0)
+            plots['Discount Amount Over Time'] = Image.open(discount_plot_img)
+
+            # Compute summary stats about the discounts
+            avg_discount = df_discounted['Discount_Amount'].mean()
+            max_discount = df_discounted['Discount_Amount'].max()
+            day_max_discount = df_discounted.loc[df_discounted['Discount_Amount'].idxmax(), 'Data zestawienia'].date()
+
+            # Store them in 'summary'
+            summary['Average Discount'] = avg_discount
+            summary['Max Discount'] = max_discount
+            summary['Date Max Discount'] = day_max_discount
 
         # Calculate Average Number of Reviews per Day
         reviews_daily_primary = df_primary.groupby(pd.Grouper(key='Data zestawienia', freq='D'))['IloscOpini'].mean().reset_index()
@@ -559,6 +662,18 @@ class HistoricalReportGenerator:
         reviews_monthly_primary['Review_Increase'] = reviews_monthly_primary['Total Reviews'].diff() / reviews_monthly_primary['Total Reviews'].shift(1)
         reviews_monthly_primary['Review_Increase'] = reviews_monthly_primary['Review_Increase'].fillna(0).replace([float('inf'), -float('inf')], None) * 100
 
+
+        # Custom percentage change calculation to handle zero division
+        reviews_monthly_primary['Review_Increase'] = (
+            (reviews_monthly_primary['Total Reviews'].diff()) / reviews_monthly_primary['Total Reviews'].shift(1)
+        )
+        reviews_monthly_primary['Review_Increase'] = (
+            reviews_monthly_primary['Review_Increase']
+            .replace([float('inf'), -float('inf')], None)  # Replace inf values with None
+            .fillna(0)  # Replace NaN with 0
+            * 100  # Convert to percentage
+        )
+
         # Insights for Reviews MoM
         average_mom_review_increase = reviews_monthly_primary['Review_Increase'].mean()
         highest_mom_review_increase = reviews_monthly_primary['Review_Increase'].max()
@@ -568,6 +683,15 @@ class HistoricalReportGenerator:
         else:
             highest_mom_review_increase = None
             month_highest_mom_review_increase = None
+
+        # Package MoM Insights into review_stats
+        review_stats = {
+            'Average Review Increase per Day': round(average_review_increase_per_day, 2),
+            'MoM Average Review Increase (%)': average_mom_review_increase,
+            'MoM Highest Review Increase (%)': highest_mom_review_increase,
+            'Month with Highest MoM Review Increase': month_highest_mom_review_increase
+        }
+
 
         # Analyze Bookings MoM if booked_summary exists
         if booked_summary:
@@ -617,19 +741,13 @@ class HistoricalReportGenerator:
             highest_mom_booking_increase = None
             month_highest_mom_booking_increase = None
 
-        # Package MoM Insights into review_stats
-        review_stats = {
-            'Average Review Increase per Day': round(average_review_increase_per_day, 2),
-            'MoM Average Review Increase (%)': average_mom_review_increase,
-            'MoM Highest Review Increase (%)': highest_mom_review_increase,
-            'Month with Highest MoM Review Increase': month_highest_mom_review_increase
-        }
+
 
         # Additional Insights: Price Distribution
         plt.figure(figsize=(10, 6))
         sns.histplot(df_primary['Cena'], kde=True, bins=30, color='blue')
         plt.title('Price Distribution')
-        plt.xlabel('Price (€)')
+        plt.xlabel(f'Price ({self.currency})')
         plt.ylabel('Frequency')
         plt.tight_layout()
         price_distribution_img = BytesIO()
@@ -640,9 +758,15 @@ class HistoricalReportGenerator:
 
         # Additional Insights: Correlation between Price and Number of Reviews
         plt.figure(figsize=(10, 6))
-        sns.scatterplot(data=df_primary, x='Cena', y='IloscOpini', alpha=0.6, color='red')
+        try:
+            sns.scatterplot(data=df_primary, x='Cena', y='IloscOpini', alpha=0.6, color='red')
+        except:
+            logging.warning(f"There was error for default type for Price Distribution: Reoslution Keep the First Occurrence of Each Index ")
+            df_primary = df_primary[~df_primary.index.duplicated(keep='first')]
+            sns.scatterplot(data=df_primary, x='Cena', y='IloscOpini', alpha=0.6, color='red')
+
         plt.title('Price vs. Reviews Correlation')
-        plt.xlabel('Price (€)')
+        plt.xlabel(f'Price ({self.currency})')
         plt.ylabel('Number of Reviews')
         plt.tight_layout()
         price_reviews_correlation_img = BytesIO()
@@ -710,7 +834,9 @@ class HistoricalReportGenerator:
             'Price vs. Reviews Correlation': 'This chart explores the correlation between price and the number of reviews for the primary category, suggesting how pricing may affect customer engagement.',
             'Reviews Moving Average': 'This chart shows the moving average of reviews over time for the primary category, smoothing out short-term fluctuations to reveal longer-term trends.',
             'Category Distribution': 'This pie chart displays the distribution of different categories, providing insight into the variety and prevalence of each category within the dataset.',
-            'Position by Category': 'This box plot illustrates the distribution of positions within each category, highlighting any correlations or differences between categories.'
+            'Position by Category': 'This box plot illustrates the distribution of positions within each category, highlighting any correlations or differences between categories.',
+            'Discount Amount Over Time': "This chart shows the amount of discount on the original price.",
+            'Original vs. Discounted Price': "This bar chart compares the original (blue) and discounted (green) prices for each date where a discount was applied. A noticeable gap indicates a larger discount."
         }
 
         title = df['Tytul'].iloc[0] if not df['Tytul'].isnull().all() else "No Title Available"
@@ -726,12 +852,15 @@ class HistoricalReportGenerator:
             f"Title: {title_href}",
             f"Total records analyzed: {len(df)}",
             f"Date range: {df['Data zestawienia'].min().strftime('%Y-%m-%d')} to {df['Data zestawienia'].max().strftime('%Y-%m-%d')}",
-            f"Average price: €{summary['Average Price']:.2f}",
-            f"Highest price: €{df['Cena'].max():.2f} on {df.loc[df['Cena'].idxmax(), 'Data zestawienia'].strftime('%Y-%m-%d')}",
+            f"Average price: {self.currency}{summary['Average Price']:.2f}",
+            f"Highest price: {self.currency}{df['Cena'].max():.2f} on {df.loc[df['Cena'].idxmax(), 'Data zestawienia'].strftime('%Y-%m-%d')}",
             f"Number of reviews: {int(summary['Total Reviews'])} (Average: {summary['Average Number of Reviews']:.2f} per record)",
-            f"Total bookings (if available): {booked_summary['Total Bookings']}" if booked_summary else "Booking data not available",
         ]
+        if booked_summary:
+            self.overview.append(f"Total bookings: {booked_summary['Total Bookings']}")
 
+        self.overview.append(f"OTA: {self.ota}")            
+        
         return summary, reviews_daily_primary, review_stats, booked_summary, plots, chart_explanations, category_counts_dict, position_stats
 
 
@@ -745,10 +874,21 @@ class HistoricalReportGenerator:
             f"<ul>\n"
             f"  <li><strong>Total Records Analyzed:</strong> {summary['Total Records']}</li>\n"
             f"  <li><strong>Date Range:</strong> {summary['Date Range']}</li>\n"
-            f"  <li><strong>Average Price:</strong> €{summary['Average Price']:.2f}</li>\n"
-            f"  <li><strong>Median Price:</strong> €{summary['Median Price']:.2f}</li>\n"
+            f"  <li><strong>Average Price:</strong> {self.currency}{summary['Average Price']:.2f}</li>\n"
+            f"  <li><strong>Median Price:</strong> {self.currency}{summary['Median Price']:.2f}</li>\n"
             f"  <li><strong>Average Number of Reviews:</strong> {summary['Average Number of Reviews']:.2f}</li>\n"
             f"  <li><strong>Number of Reviews:</strong> {int(summary['Total Reviews'])}</li>\n"
+            
+        )
+
+        discount_days = summary.get('Discounted Days', 0)
+        if discount_days > 0:
+            insight += (
+                f"<li><strong>Discounted Days:</strong> There were {discount_days} days with a discounted price in "
+                f"the selected time range.</li>\n"
+            )
+
+        insight += (
             f"</ul>\n\n"
         )
 
@@ -769,11 +909,11 @@ class HistoricalReportGenerator:
             f"  </tr>\n"
             f"  <tr>\n"
             f"    <td><strong>Average Price</strong></td>\n"
-            f"    <td>€{summary['Average Price']:.2f}</td>\n"
+            f"    <td>{self.currency}{summary['Average Price']:.2f}</td>\n"
             f"  </tr>\n"
             f"  <tr>\n"
             f"    <td><strong>Median Price</strong></td>\n"
-            f"    <td>€{summary['Median Price']:.2f}</td>\n"
+            f"    <td>{self.currency}{summary['Median Price']:.2f}</td>\n"
             f"  </tr>\n"
             f"  <tr>\n"
             f"    <td><strong>Average Number of Reviews</strong></td>\n"
@@ -806,13 +946,39 @@ class HistoricalReportGenerator:
                     f"    <td>{review_stats['MoM Highest Review Increase (%)']:.2f}% on {review_stats['Month with Highest MoM Review Increase']}</td>\n" \
                     f"  </tr>\n"
         else:
-            insight += f"  <tr>\n" \
-                    f"    <td><strong>Highest MoM Review Increase (%)</strong></td>\n" \
-                    f"    <td>Not enough data to determine.</td>\n" \
-                    f"  </tr>\n"
+            pass
+            # insight += f"  <tr>\n" \
+            #         f"    <td><strong>Highest MoM Review Increase (%)</strong></td>\n" \
+            #         f"    <td>Not enough data to determine.</td>\n" \
+            #         f"  </tr>\n"
 
         insight += f"</table>\n\n"
 
+        # Discount Price Analysis Section
+        average_discount = summary.get('Average Discount', 0)
+        max_discount = summary.get('Max Discount', 0)
+        date_max_discount = summary.get('Date Max Discount', None)
+
+        if discount_days > 0:  # or if 'Average Discount' is in summary
+            insight += (
+                f"<h3>Discount Insights:</h3>\n"
+                f"<table>\n"
+                f"  <tr>\n"
+                f"    <th>Metric</th>\n"
+                f"    <th>Value</th>\n"
+                f"  </tr>\n"
+                f"  <tr>\n"
+                f"    <td><strong>Average Discount</strong></td>\n"
+                f"    <td>{self.currency}{average_discount:.2f}</td>\n"
+                f"  </tr>\n"
+                f"  <tr>\n"
+                f"    <td><strong>Max Discount</strong></td>\n"
+                f"    <td>{self.currency}{max_discount:.2f}"
+                + (f" on {date_max_discount}" if date_max_discount else "")
+                + "</td>\n"
+                f"  </tr>\n"
+                f"</table>\n\n"
+            )
         # Booked Data Analysis Section
         if booked_summary:
             insight += (
@@ -843,10 +1009,11 @@ class HistoricalReportGenerator:
                         f"    <td>{booked_summary['MoM Highest Booking Increase (%)']:.2f}% on {booked_summary['Month with Highest MoM Booking Increase']}</td>\n" \
                         f"  </tr>\n"
             else:
-                insight += f"  <tr>\n" \
-                        f"    <td><strong>Highest MoM Booking Increase (%)</strong></td>\n" \
-                        f"    <td>Not enough data to determine.</td>\n" \
-                        f"  </tr>\n"
+                pass
+                # insight += f"  <tr>\n" \
+                #         f"    <td><strong>Highest MoM Booking Increase (%)</strong></td>\n" \
+                #         f"    <td>Not enough data to determine.</td>\n" \
+                #         f"  </tr>\n"
 
             insight += f"</table>\n\n"
 
@@ -854,7 +1021,7 @@ class HistoricalReportGenerator:
         insight += (
             f"<h3>Key Insights:</h3>\n"
             f"<ul>\n"
-            f"  <li>The tour has an average price of <strong>€{summary['Average Price']:.2f}</strong>, with a median price of <strong>€{summary['Median Price']:.2f}</strong>.</li>\n"
+            f"  <li>The tour has an average price of <strong>{self.currency}{summary['Average Price']:.2f}</strong>, with a median price of <strong>{self.currency}{summary['Median Price']:.2f}</strong>.</li>\n"
             f"  <li>There is an average increase of <strong>{review_stats['Average Review Increase per Day']} reviews per day</strong>.</li>\n"
         )
 
@@ -887,7 +1054,7 @@ class HistoricalReportGenerator:
         insight += f"</ul>\n\n"
 
         # Category Insights Section
-        if category_counts:
+        if category_counts and len(category_counts) > 1:
             most_common_category = max(category_counts, key=category_counts.get)
             insight += (
                 f"<h3>Category Insights:</h3>\n"
