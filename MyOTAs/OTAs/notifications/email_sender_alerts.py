@@ -1,6 +1,6 @@
 from datetime import datetime 
 from azure.communication.email import EmailClient
-import os
+from bs4 import BeautifulSoup
 import base64
 
 
@@ -87,12 +87,66 @@ class EmailSenderAlerts:
         except Exception as ex:
             self.logger.logger_err.error(f"Failed to send email to {self.email_address}: {ex}")
 
+    def extract_information_from_html(self, overview_html):
+        soup = BeautifulSoup(overview_html, 'html.parser')
+        title_element = soup.find('a')
+        if not title_element:
+            raise ValueError("Title is missing")
+        title = title_element.text.strip() 
 
+        link = title_element['href'] if title_element and 'href' in title_element.attrs else "N/A"
+
+        # Extract additional information
+        records_analyzed = soup.find(text=lambda x: "Total records analyzed:" in x)
+        date_range = soup.find(text=lambda x: "Date range:" in x)
+        average_price = soup.find(text=lambda x: "Average price:" in x)
+        highest_price = soup.find(text=lambda x: "Highest price:" in x)
+        reviews = soup.find(text=lambda x: "Number of reviews:" in x)
+        ota = soup.find(text=lambda x: "OTA:" in x)
+        booked = soup.find(text=lambda x: "Booked:" in x)
+
+        # Format the extracted data
+        extracted_data = {
+            "Title": title,
+            "Link": link,
+            "Total Records Analyzed": records_analyzed.split(":")[1].strip() if records_analyzed else "N/A",
+            "Date Range": date_range.split(":")[1].strip() if date_range else "N/A",
+            "Average Price": average_price.split(":")[1].strip() if average_price else "N/A",
+            "Highest Price": highest_price.split(":")[1].strip() if highest_price else "N/A",
+            "Number of Reviews": reviews.split(":")[1].strip() if reviews else "N/A",
+            "Booked": booked.split(":")[1].strip() if booked else "N/A",
+            "OTA": ota.split(":")[1].strip() if ota else "N/A",
+        }
+
+        return extracted_data
     def send_report_email_with_attachment(self, pdf_path, overview_html):
         """
         Sends an automated scheduled product report email with the given PDF file attached.
         Includes a concise overview of the PDF content in the email body.
         """
+        overview_detials = self.extract_information_from_html(overview_html=overview_html)
+
+        
+        filtered_data = {key: value for key, value in overview_detials.items() if value != "N/A"}
+        
+        key_metrics_html = ""
+        # Build the dynamic HTML for the key metrics
+        for key, value in filtered_data.items():
+            # Handle Title with clickable link
+            if key == "Title":
+                link = filtered_data.get("Link", "#")  # Get the link if available, or use '#' as a fallback
+                key_metrics_html += f"""
+                    <p><span class="metric-title">{key.replace('_', ' ')}:</span> 
+                    <span class="metric-value"><a href="{link}" target="_blank" style="color: #009ADB; text-decoration: none;">{value}</a></span></p>
+                """
+            # Skip the link field as it's already embedded in the title
+            elif key == "Link":
+                continue
+            # Handle other metrics normally
+            else:
+                key_metrics_html += f"""
+                    <p><span class="metric-title">{key.replace('_', ' ')}:</span> <span class="metric-value">{value}</span></p>
+                """
         try:
             # Read PDF file and encode in base64
             with open(pdf_path, "rb") as pdf_file:
@@ -106,13 +160,14 @@ class EmailSenderAlerts:
             )
             client = EmailClient.from_connection_string(connection_string)
 
+            # Construct the email message
             message = {
                 "senderAddress": "DoNotReply@6befcbca-8357-4801-8832-a8e8ffcf5b4c.azurecomm.net",
                 "recipients": {
                     "to": [{"address": f"{self.email_address}"}],
                 },
                 "content": {
-                    "subject": "MyOTAs: Latest Product Report",
+                    "subject": f"MyOTAs: Performance Report for {filtered_data.get('Title', 'Your Product')}",
                     "plainText": (
                         "Hello,\n\n"
                         "Product performance report is ready. "
@@ -132,13 +187,14 @@ class EmailSenderAlerts:
                                     color: #333;
                                     line-height: 1.6;
                                     padding: 20px;
+                                    background-color: #f4f6f9;
                                 }}
                                 .logo-container {{
                                     text-align: center;
                                     margin-bottom: 20px;
                                 }}
                                 .logo {{
-                                    max-width: 250px;
+                                    max-width: 200px;
                                     height: auto;
                                 }}
                                 .header {{
@@ -148,25 +204,56 @@ class EmailSenderAlerts:
                                     padding: 15px;
                                     border-radius: 5px;
                                     margin-bottom: 20px;
+                                    font-size: 20px;
+                                    font-weight: bold;
                                 }}
                                 .content {{
-                                    background-color: #f9f9f9;
+                                    background-color: #ffffff;
                                     padding: 20px;
                                     border: 1px solid #e0e0e0;
-                                    border-radius: 5px;
+                                    border-radius: 8px;
+                                    box-shadow: 0px 3px 6px rgba(0, 0, 0, 0.1);
+                                }}
+                                .section-title {{
+                                    font-size: 18px;
+                                    color: #009ADB;
+                                    margin-bottom: 10px;
+                                    font-weight: bold;
                                 }}
                                 .overview {{
-                                    background-color: white;
+                                    background-color: #f9f9f9;
                                     border: 1px solid #ddd;
                                     padding: 15px;
                                     margin: 15px 0;
                                     border-radius: 5px;
+                                }}
+                                .highlight {{
+                                    font-weight: bold;
+                                    color: #009ADB;
                                 }}
                                 .footer {{
                                     text-align: center;
                                     color: #777;
                                     font-size: 12px;
                                     margin-top: 20px;
+                                }}
+                                .key-metrics {{
+                                    margin-top: 20px;
+                                    padding: 15px;
+                                    border-radius: 5px;
+                                    border: 1px solid #ddd;
+                                    background-color: #f9f9f9;
+                                }}
+                                .key-metrics p {{
+                                    margin: 8px 0;
+                                    font-size: 16px;
+                                }}
+                                .metric-title {{
+                                    font-weight: bold;
+                                    color: #555;
+                                }}
+                                .metric-value {{
+                                    color: #333;
                                 }}
                             </style>
                         </head>
@@ -176,16 +263,16 @@ class EmailSenderAlerts:
                                     alt="MyOTAs Logo" class="logo" />
                             </div>
                             <div class="header">
-                                <h1>Your Product Report</h1>
+                                Performance Insights for {filtered_data.get('Title', 'Your Product')}
                             </div>
                             <div class="content">
                                 <p>Hello,</p>
-                                <p>Latest performance insights are here. Check out the key highlights below:</p>
-                                <div class="overview">
-                                    {overview_html}
+                                <p>Here are the latest performance insights for your product:</p>
+                                <div class="key-metrics">
+                                    {key_metrics_html}
                                 </div>
-                                <p>Full details are available in the attached PDF report.</p>
-                                <p>Need help? Contact our support team.</p>
+                                <p>For detailed information, please refer to the attached PDF report.</p>
+                                <p>If you need any assistance, feel free to contact our support team.</p>
                                 <p><strong>Best regards,<br/>MyOTAs Team</strong></p>
                             </div>
                             <div class="footer">

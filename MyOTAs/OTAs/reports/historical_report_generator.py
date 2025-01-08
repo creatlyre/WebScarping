@@ -68,13 +68,15 @@ class HistoricalReportGenerator:
         if city and isinstance(city, str):
             self.currency = self.city_currency_map.get(city.lower(), self.currency)
 
+        self.city = city
         self.overview = []  # Store a brief summary for external use
 
     # ------------------------- Utility Functions -----------------------------
 
-    def connect_to_database(self, already_done=False):
+    def connect_to_database(self, retry_count=0, max_retries=3):
         """
-        Establishes a connection to the SQL Server database. Implements a retry mechanism if the database might be auto-stopped.
+        Establishes a connection to the SQL Server database.
+        Implements a retry mechanism if the database might be auto-stopped or unavailable.
         """
         try:
             connection_string = (
@@ -91,20 +93,28 @@ class HistoricalReportGenerator:
 
         except pyodbc.OperationalError as e:
             if 'Timeout' in str(e) or 'Login timeout expired' in str(e):
-                if not already_done:
-                    logging.warning("Database may be stopped. Trying to reconnect in 120 seconds...")
-                    time.sleep(120)  # Wait for 2 minutes before retrying
-                    return self.connect_to_database(already_done=True)
+                if retry_count < max_retries:
+                    retry_count += 1
+                    logging.warning(f"Operational error: {str(e)}. Retrying in 30 seconds... (Attempt {retry_count}/{max_retries})")
+                    time.sleep(30)  # Wait for 30 seconds before retrying
+                    return self.connect_to_database(retry_count, max_retries)
                 else:
-                    logging.error("Second attempt to reconnect failed. Please check if the database is running.")
+                    logging.error("Max retries reached. Could not reconnect to the database.")
                     return None
             else:
-                logging.error(f"Failed to connect to database: {str(e)}")
+                logging.error(f"Operational error occurred: {str(e)}")
                 return None
 
         except Exception as e:
-            logging.error(f"An unexpected error occurred: {str(e)}")
-            return None
+            if retry_count < max_retries:
+                retry_count += 1
+                logging.warning(f"Unexpected error: {str(e)}. Retrying in 30 seconds... (Attempt {retry_count}/{max_retries})")
+                time.sleep(30)  # Wait for 30 seconds before retrying
+                return self.connect_to_database(retry_count, max_retries)
+            else:
+                logging.error(f"Max retries reached. Could not recover from error: {str(e)}")
+                raise RuntimeError(f"Failed to connect to the database after {max_retries} attempts. Last error: {str(e)}")
+
 
     def extract_table_name(self, url):
         """
@@ -585,12 +595,12 @@ class HistoricalReportGenerator:
         reviews_daily_primary.rename(columns={'IloscOpini': 'Average Reviews'}, inplace=True)
         reviews_daily_primary['Data zestawienia'] = pd.to_datetime(reviews_daily_primary['Data zestawienia'])
 
-        # Plot Average Number of Reviews Over Time for Primary Category
+        # Plot Number of Reviews Over Time for Primary Category
         plt.figure(figsize=(12, 6))
         sns.lineplot(data=reviews_daily_primary, x='Data zestawienia', y='Average Reviews', marker='o', color='orange')
-        plt.title('Average Number of Reviews Over Time')
+        plt.title('Number of Reviews Over Time')
         plt.xlabel('Date')
-        plt.ylabel('Average Number of Reviews')
+        plt.ylabel('Number of Reviews')
 
         # Improve date formatting on X-axis
         ax = plt.gca()
@@ -605,7 +615,7 @@ class HistoricalReportGenerator:
         plt.savefig(reviews_over_time_img, format='PNG')
         plt.close()
         reviews_over_time_img.seek(0)
-        plots['Average Number of Reviews Over Time'] = Image.open(reviews_over_time_img)
+        plots['Number of Reviews Over Time'] = Image.open(reviews_over_time_img)
 
         # Check if 'Booked' column has data
         if df_primary['Booked'].notna().any():
@@ -632,9 +642,9 @@ class HistoricalReportGenerator:
             # Plot Number of Bookings Over Time
             plt.figure(figsize=(12, 6))
             sns.lineplot(data=bookings_daily_primary, x='Data zestawienia', y='Average Bookings', color='green')
-            plt.title('Average Number of Bookings Over Time')
+            plt.title('Number of Bookings Over Time')
             plt.xlabel('Date')
-            plt.ylabel('Average Number of Bookings')
+            plt.ylabel('Number of Bookings')
 
             # Improve date formatting on X-axis
             ax = plt.gca()
@@ -649,7 +659,7 @@ class HistoricalReportGenerator:
             plt.savefig(bookings_over_time_img, format='PNG')
             plt.close()
             bookings_over_time_img.seek(0)
-            plots['Average Number of Bookings Over Time'] = Image.open(bookings_over_time_img)
+            plots['Number of Bookings Over Time'] = Image.open(bookings_over_time_img)
         else:
             booked_summary = None
 
@@ -828,8 +838,8 @@ class HistoricalReportGenerator:
         # Chart explanations
         chart_explanations = {
             'Price Over Time': f'{price_over_time_desc}',
-            'Average Number of Reviews Over Time': 'This chart illustrates the trend in the average number of reviews per day over time for the primary category, reflecting customer engagement and satisfaction levels.',
-            'Average Number of Bookings Over Time': 'This chart shows the trend in the average number of bookings per day over time for the primary category, indicating customer purchasing behavior.',
+            'Number of Reviews Over Time': 'This chart illustrates the trend in the number of reviews per day over time for the primary category, reflecting customer engagement and satisfaction levels.',
+            'Number of Bookings Over Time': 'This chart shows the trend in the number of bookings per day over time for the primary category, indicating customer purchasing behavior.',
             'Price Distribution': 'This chart shows the distribution of prices for the tour within the primary category, indicating the most common price points.',
             'Price vs. Reviews Correlation': 'This chart explores the correlation between price and the number of reviews for the primary category, suggesting how pricing may affect customer engagement.',
             'Reviews Moving Average': 'This chart shows the moving average of reviews over time for the primary category, smoothing out short-term fluctuations to reveal longer-term trends.',
@@ -854,7 +864,7 @@ class HistoricalReportGenerator:
             f"Date range: {df['Data zestawienia'].min().strftime('%Y-%m-%d')} to {df['Data zestawienia'].max().strftime('%Y-%m-%d')}",
             f"Average price: {self.currency}{summary['Average Price']:.2f}",
             f"Highest price: {self.currency}{df['Cena'].max():.2f} on {df.loc[df['Cena'].idxmax(), 'Data zestawienia'].strftime('%Y-%m-%d')}",
-            f"Number of reviews: {int(summary['Total Reviews'])} (Average: {summary['Average Number of Reviews']:.2f} per record)",
+            f"Number of reviews: {int(summary['Total Reviews'])}",
         ]
         if booked_summary:
             self.overview.append(f"Total bookings: {booked_summary['Total Bookings']}")
@@ -1593,7 +1603,10 @@ class HistoricalReportGenerator:
             # Check if the table exists
             while not self.check_table_exists(table_name):
                 logging.warning(f"Table '{table_name}' not found in database '{self.DATABASE}'.")
-                table_name = input("Please enter a valid table name: ").strip()
+                if table_name != self.city and len(self.city) > 1:
+                    table_name = self.city
+                else:
+                    table_name = input("Please enter a valid table name: ").strip()
                 if table_name.lower() == 'exit':
                     logging.info("Exiting the program.")
                     self.cnxn.close()

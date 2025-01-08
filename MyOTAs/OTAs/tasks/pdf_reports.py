@@ -14,51 +14,8 @@ from notifications.email_sender_alerts import EmailSenderAlerts
 from logger.logger_manager import LoggerManager
 from file_management.file_path_manager import FilePathManager
 
-def load_csv(file_path):
-    try:
-        # Assuming the CSV has a column named 'URL'
-        df = pd.read_csv(file_path)
-        if 'URL' not in df.columns:
-            raise ValueError("The CSV file must have a 'URL' column.")
-        return df
-    except Exception as e:
-        print(f"Error loading CSV: {e}")
-        return None
-file_path_config = r'G:\.shortcut-targets-by-id\1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2\MyOTAs\Baza Excel\Resource\new_year_reports_urls.csv'
-df = load_csv(file_path_config)
-df_to_process = df[df['Status'] != 'Done']
-
-for index, row in df_to_process.iterrows():
-    url = row['URL']
-    viewer = row['Viewer']
-    city = row['City']
-    ota = url.split('.com')[0].split('www.')[-1]
-    if ota == 'getyourguide':
-        ota = 'GetYourGuide' 
-    else:
-        ota = ota.capitalize
-    if city:
-        print(f"---------------- {city} City")
-    print(f"Processing URL: {url}")
-    file_manager = ConnectorsSQL_OTA()
-    file_manager_logger = FilePathManager("TEST", "NA")
-    logger = LoggerManager(file_manager_logger, f'PDF_reports')
-
-    historical_review = HistoricalReportGenerator(file_manager.USERNAME, file_manager.PASSWORD, city, ota)
-
-    # url = input("URL Input:")
-    
-    # date filter option: None, previous_month previous_week previous_quarter last_week, 
-    # last_year_to_date -> (today - 365days), last_year -> (entire last year)
-    
-    historical_review.run_report(url, viewer=viewer, date_filter='last_year')
-
-    # Convert the overview to an HTML-compatible string
-    overview_html = "<br>".join(historical_review.overview)
-    # Define the HTML filename based on the viewer
-    filename = f"PDF_reports\{viewer}_summary.html"
-
-    # Check if the file exists
+def generate_html_summary(filename):
+       # Check if the file exists
     if os.path.exists(filename):
         # Append to the file
         with open(filename, 'a', encoding='utf-8') as file:
@@ -116,7 +73,50 @@ for index, row in df_to_process.iterrows():
             </html>
             """)
         print(f"Created new HTML file and saved overview: {filename}")
+def load_csv(file_path):
+    try:
+        # Assuming the CSV has a column named 'URL'
+        df = pd.read_csv(file_path)
+        if 'URL' not in df.columns:
+            raise ValueError("The CSV file must have a 'URL' column.")
+        return df
+    except Exception as e:
+        print(f"Error loading CSV: {e}")
+        return None
+file_path_config = r'G:\.shortcut-targets-by-id\1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2\MyOTAs\Baza Excel\Resource\new_year_reports_urls.csv'
+df = load_csv(file_path_config)
+df_to_process = df[df['Status'] != 'Done']
+
+for index, row in df_to_process.iterrows():
+    url = row['URL']
+    viewer = row['Viewer']
+    city = row['City']
+    ota = url.split('.com')[0].split('www.')[-1]
+    if ota == 'getyourguide':
+        ota = 'GetYourGuide' 
+    else:
+        ota = ota.capitalize
+    if city:
+        print(f"---------------- {city} City")
+    print(f"Processing URL: {url}")
+    file_manager = ConnectorsSQL_OTA()
+    file_manager_logger = FilePathManager("TEST", "NA")
+    logger = LoggerManager(file_manager_logger, f'PDF_reports')
+
+    historical_review = HistoricalReportGenerator(file_manager.USERNAME, file_manager.PASSWORD, city, ota)
+
+    # url = input("URL Input:")
     
+    # date filter option: None --> all data, previous_month, previous_week, previous_quarter, last_week, 
+    # last_year_to_date -> (today - 365days), last_year -> (entire last year)
+    
+    historical_review.run_report(url, viewer=viewer, date_filter='last_year')
+
+    # Convert the overview to an HTML-compatible string
+    overview_html = "<br>".join(historical_review.overview)
+    # Define the HTML filename based on the viewer
+    filename = f"PDF_reports\{viewer}_summary.html"
+    generate_html_summary(filename=filename)
     # Update only the current row's status
     df.at[index, 'Status'] = 'Done'
 
@@ -128,5 +128,5 @@ for index, row in df_to_process.iterrows():
 
 
 # # if historical_review.output_filename:
-#     email_sender = EmailSenderAlerts("wojbal3@gmail.com", "Test_123", url, "2024-12-11", "N/A", "N/A", logger)
-#     email_sender.send_report_email_with_attachment(historical_review.output_filename, overview_html) 
+    email_sender = EmailSenderAlerts("wojbal3@gmail.com", "Test_123", url, "2024-12-11", "N/A", "N/A", logger)
+    email_sender.send_report_email_with_attachment(historical_review.output_filename, overview_html) 
