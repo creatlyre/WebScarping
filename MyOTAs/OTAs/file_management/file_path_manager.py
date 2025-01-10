@@ -29,7 +29,7 @@ class FilePathManager:
         self.blob_name = fr'{self.site} - {self.date_today}.xlsx'
         self.config_path = 'resources/config.json'
         self.alerts_csv_file_path = fr'G:/.shortcut-targets-by-id/1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2/MyOTAs/Baza Excel/Resource/urls_price_alerts.csv'
-
+        self.pdf_report_config_file_path = fr'G:\.shortcut-targets-by-id\1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2\MyOTAs\Baza Excel\Resource\new_year_reports_urls.csv'
         # Logs processed path
         self.file_path_logs_processed = fr'G:/.shortcut-targets-by-id/1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2/MyOTAs/Baza Excel/Logs/files_processed/{self.blob_name.split(".")[0]}'
 

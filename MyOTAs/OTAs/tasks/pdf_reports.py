@@ -83,8 +83,9 @@ def load_csv(file_path):
     except Exception as e:
         print(f"Error loading CSV: {e}")
         return None
-file_path_config = r'G:\.shortcut-targets-by-id\1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2\MyOTAs\Baza Excel\Resource\new_year_reports_urls.csv'
-df = load_csv(file_path_config)
+    
+file_path_manager = FilePathManager('N/A', 'N/A')
+df = load_csv(file_path_manager.pdf_report_config_file_path)
 df_to_process = df[df['Status'] != 'Done']
 
 for index, row in df_to_process.iterrows():
@@ -92,13 +93,14 @@ for index, row in df_to_process.iterrows():
     viewer = row['Viewer']
     city = row['City']
     ota = url.split('.com')[0].split('www.')[-1]
+    date_filter = row['date_filter']
     if ota == 'getyourguide':
         ota = 'GetYourGuide' 
     else:
         ota = ota.capitalize
     if city:
         print(f"---------------- {city} City")
-    print(f"Processing URL: {url}")
+    print(f"Processing URL with filter {date_filter} -- {url}")
     file_manager = ConnectorsSQL_OTA()
     file_manager_logger = FilePathManager("TEST", "NA")
     logger = LoggerManager(file_manager_logger, f'PDF_reports')
@@ -110,7 +112,7 @@ for index, row in df_to_process.iterrows():
     # date filter option: None --> all data, previous_month, previous_week, previous_quarter, last_week, 
     # last_year_to_date -> (today - 365days), last_year -> (entire last year)
     
-    historical_review.run_report(url, viewer=viewer, date_filter='last_year')
+    historical_review.run_report(url, viewer=viewer, date_filter=date_filter)
 
     # Convert the overview to an HTML-compatible string
     overview_html = "<br>".join(historical_review.overview)
@@ -121,12 +123,12 @@ for index, row in df_to_process.iterrows():
     df.at[index, 'Status'] = 'Done'
 
     # Save updated rows back to the CSV file
-    df.to_csv(file_path_config, index=False)
+    df.to_csv(file_path_manager.pdf_report_config_file_path, index=False)
     print(f"Row {index} updated and saved to CSV.")
 
 
 
 
 # # if historical_review.output_filename:
-    email_sender = EmailSenderAlerts("wojbal3@gmail.com", "Test_123", url, "2024-12-11", "N/A", "N/A", logger)
+    email_sender = EmailSenderAlerts("wojbal3@gmail.com", "N/A", url, "N/A", "N/A", "N/A", logger)
     email_sender.send_report_email_with_attachment(historical_review.output_filename, overview_html) 

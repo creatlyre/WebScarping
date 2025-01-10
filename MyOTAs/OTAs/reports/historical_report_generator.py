@@ -177,14 +177,14 @@ class HistoricalReportGenerator:
 
         # Define date filtering conditions
         date_conditions = {
-            'previous_month': "[Data zestawienia] >= DATEFROMPARTS(YEAR(GETDATE()), MONTH(GETDATE()) - 1, 1) "
-                              "AND [Data zestawienia] < DATEFROMPARTS(YEAR(GETDATE()), MONTH(GETDATE()), 1)",
-            'previous_week': "[Data zestawienia] >= DATEADD(WEEK, -1, DATEADD(WEEK, DATEDIFF(WEEK, 0, GETDATE()), 0)) "
-                             "AND [Data zestawienia] < DATEADD(WEEK, DATEDIFF(WEEK, 0, GETDATE()), 0)",
+            'previous_month':   "[Data zestawienia] >= DATEADD(MONTH, -1, DATEFROMPARTS(YEAR(GETDATE()), MONTH(GETDATE()), 1))"
+                                "AND [Data zestawienia] < DATEFROMPARTS(YEAR(GETDATE()), MONTH(GETDATE()), 1)",
+            'previous_week':    "[Data zestawienia] >= DATEADD(WEEK, -1, DATEADD(WEEK, DATEDIFF(WEEK, 0, GETDATE()), 0)) "
+                                "AND [Data zestawienia] < DATEADD(WEEK, DATEDIFF(WEEK, 0, GETDATE()), 0)",
             'previous_quarter': "[Data zestawienia] >= DATEADD(QUARTER, -1, DATEFROMPARTS(YEAR(GETDATE()), "
                                 "((MONTH(GETDATE())-1)/3)*3 + 1, 1)) "
                                 "AND [Data zestawienia] < DATEFROMPARTS(YEAR(GETDATE()), ((MONTH(GETDATE())-1)/3 + 1)*3 + 1, 1)",
-            'last_week': "[Data zestawienia] >= DATEADD(DAY, -7, GETDATE())",
+            'last_week': "      [Data zestawienia] >= DATEADD(DAY, -7, GETDATE())",
 
             'last_year_to_date': "[Data zestawienia] >= DATEADD(DAY, -365, GETDATE())",
 
@@ -375,11 +375,18 @@ class HistoricalReportGenerator:
             # Filter rows within the acceptable range
             df = df[(df['Cena'] >= lower_bound) & (df['Cena'] <= upper_bound)]
         else:
-            Q1 = df['Cena'].quantile(0.25)
-            Q3 = df['Cena'].quantile(0.75)
+            combined = pd.concat([
+                df[['Cena']].rename(columns={'Cena': 'Value'}),
+                df[['Przecena']].rename(columns={'Przecena': 'Value'})
+            ]).dropna()
+
+            # Calculate quantiles based on the combined dataset
+            Q1 = combined['Value'].quantile(0.25)
+            Q3 = combined['Value'].quantile(0.75)
             IQR = Q3 - Q1
-            lower_bound = Q1 - 2.5 * IQR
-            upper_bound = Q3 + 2.5 * IQR
+            # Define bounds
+            lower_bound = Q1 - 1.5 * IQR
+            upper_bound = Q3 + 1.5 * IQR
             # Filter rows within the acceptable range
             df = df[(df['Cena'] >= lower_bound) & (df['Cena'] <= upper_bound)]
 

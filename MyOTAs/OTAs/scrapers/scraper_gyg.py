@@ -336,11 +336,22 @@ class ScraperGYG(ScraperBase):
 
             # Extract price and discount
             price_element = tour_item.find('div', {'class': 'activity-price'})
-            discount_element = price_element.find_all('span', {'class': 'activity-price__text'})
+            discount_element = price_element.find_all('div', {'class': 'activity-price__text'})
 
             if len(discount_element) == 2:
-                price = discount_element[0].get_text(strip=True)
-                discount = discount_element[1].get_text(strip=True)
+                # Check for the element with actual content
+                discount_texts = [el.get_text(strip=True) for el in discount_element if el.get_text(strip=True)]
+                if len(discount_texts) == 2:
+                    price = discount_texts[0]
+                    discount = discount_texts[1]
+                elif len(discount_texts) == 1:
+                    price = discount_texts[0]
+                    discount = "N/A"
+                else:
+                    self.logger.logger_err.error("Price element not found.")
+                    raise ("Price element not found.")
+                    
+
                 self.logger.logger_info.debug(f"Extracted price: {price}")
                 self.logger.logger_info.debug(f"Extracted discount: {discount}")
             else:
@@ -350,8 +361,8 @@ class ScraperGYG(ScraperBase):
                     self.logger.logger_info.debug(f"Extracted price: {price}")
                 else:
                     self.logger.logger_err.error("Price element not found.")
+                    
                 self.logger.logger_info.debug("No discount found; set to 'N/A'.")
-
             # Extract product URL
             link_element = tour_item.find('a', href=True)
             if link_element:
