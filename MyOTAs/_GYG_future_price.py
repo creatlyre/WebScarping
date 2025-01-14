@@ -1,3 +1,4 @@
+# _GYG_future_price.py
 import os
 import sys
 import time
@@ -254,6 +255,7 @@ def get_future_price(driver, url, viewer, city, language, adults_amount, max_day
         change_currency(driver, url)
 
         if not clicked_cookies_essentials:
+            time.sleep(4)
             check_and_click_only_essential(driver, url)
 
         activity_title = get_activity_title(driver, url)
@@ -584,6 +586,31 @@ def transform_upload_to_refined(local_file_path, storage_account_name, storage_a
         df['city'] = df['city'].str.title()
 
         output_file_path = "temp_modified_excel.xlsx"
+
+
+        # Clear null rows add all tour options for each null days for unique url
+        null_rows = df[df['tour_option'].isnull()]
+        uids = null_rows['uid'].unique() 
+        # Create new rows for each URL group
+        new_rows = []
+        for uid in uids:
+            # Get rows with tour_option values for the current URL
+            url_specific_options = df[(df['uid'] == uid) & df['tour_option'].notnull()]['tour_option'].unique()
+            
+            # Get rows with NULL tour_option for the current URL
+            url_null_rows = null_rows[null_rows['uid'] == uid]
+            
+            # Create new rows for each tour_option
+            for _, null_row in url_null_rows.iterrows():
+                for tour_option in url_specific_options:
+                    new_row = null_row.copy()
+                    new_row['tour_option'] = tour_option
+                    new_rows.append(new_row)
+
+        # Append the new rows to the original DataFrame
+        df = pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
+        df = df[~df['tour_option'].isnull()]
+
         df.to_excel(output_file_path, index=False)
 
         blob_service_client = BlobServiceClient.from_connection_string(connection_string)
