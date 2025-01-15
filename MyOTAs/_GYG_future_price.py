@@ -755,6 +755,7 @@ def main():
                 schedules = cfg['schedules']
 
                 frequency, max_days = config_reader.get_highest_order_schedule(schedules)
+
                 if frequency == "No schedule for today":
                     logger.logger_done.info(f"URL: {url} is not scheduled for today.")
                     continue
@@ -767,6 +768,10 @@ def main():
                     logger.logger_done.info(f"Processing URL: {url}, Adults: {adults}, Language: {language}, Frequency: {frequency}, Max Days: {max_days}")
                     get_future_price(driver, url, viewer, city, language, adults, max_days, config)
                     combinations.add((adults, language))
+                    next_run = config_reader.calculate_next_run_date(schedules)
+                    last_run = datetime.datetime.now().strftime('%Y-%m-%d')
+                    
+                    config_reader.update_next_last_run(SITE, url=url, adults=adults, language=language, frequency_type=frequency, next_run=next_run, last_run=last_run)
 
         quit_driver(driver)
         for adults, language in combinations:

@@ -237,6 +237,99 @@ class ConfigReader:
                 run_days.append(day)
         return run_days
 
+    
+    def is_run_day(self, test_date: datetime.datetime, schedule: Dict[str, Any]) -> bool:
+        """
+        Generalized "is this date a valid run day?" check,
+        mirroring the logic from should_run_today but for arbitrary test_date.
+        """
+        day = test_date.day
+        weekday = test_date.weekday()  # Monday=0, Sunday=6
+        month_length = calendar.monthrange(test_date.year, test_date.month)[1]
+
+        frequency_type = schedule.get('frequency_type', '').lower()
+
+        if frequency_type == "daily":
+            interval = schedule.get('interval', 1)
+            # If day=1 -> 0 % interval == 0, etc.
+            if (day - 1) % interval == 0:
+                return True
+
+        elif frequency_type == "every_other_day":
+            interval = schedule.get('interval', 2)
+            if (day - 1) % interval == 0:
+                return True
+
+        elif frequency_type == "weekly":
+            occurrences_per_week = schedule.get('occurrences_per_week', 1)
+            run_days = self.get_weekly_run_days(occurrences_per_week)
+            if weekday in run_days:
+                return True
+
+        elif frequency_type == "every_other_week":
+            run_day = schedule.get('run_day', 'monday').lower()
+            run_day_num = self.get_weekday_num(run_day)
+            if run_day_num == -1:
+                return False
+            # Check if it's an "even" ISO week
+            iso_week_number = test_date.isocalendar()[1]
+            if iso_week_number % 2 == 0 and weekday == run_day_num:
+                return True
+
+        elif frequency_type == "monthly":
+            occurrences_per_month = schedule.get('occurrences_per_month', 1)
+            run_days = self.get_monthly_run_days(occurrences_per_month, month_length)
+            if day in run_days:
+                return True
+
+        elif frequency_type in ["twice_a_day", "three_times_a_day"]:
+            # Always a valid run day (the time-of-day logic is handled externally).
+            return True
+
+        return False
+
+    # -------------------------------------------------------------------------
+    #                        CALCULATE NEXT RUN
+    # -------------------------------------------------------------------------
+    def calculate_next_run_date(self, schedules: Dict[str, Any]) -> Optional[str]:
+        """
+        Calculate the *next* day in the future that matches the schedule's frequency.
+
+        Return the date string in YYYY-MM-DD format if found,
+        or None if no valid date is found within a certain range.
+        """
+        # Starting from tomorrow (or you can start from "today")
+        today = datetime.datetime.today()      
+        day = today.day
+        weekday = today.weekday()  # Monday=0, Sunday=6
+        month_length = calendar.monthrange(today.year, today.month)[1]
+
+        sorted_schedules = sorted(
+            schedules,
+            key=lambda s: (s.get('days_in_future', 0), self.frequency_priority(s.get('frequency_type', ''))),
+            reverse=True
+        )
+
+        
+        for schedule in sorted_schedules:
+            frequency_type = schedule.get('frequency_type', '').lower()
+            days_in_future = schedule.get('days_in_future', 0)
+
+            if self.should_run_today(today, day, weekday, month_length, schedule):
+                print(f"Today matches schedule: {frequency_type} with days_in_future={days_in_future}")
+
+                today = datetime.datetime.now()
+                start_date = today + datetime.timedelta(days=1)
+
+                # We'll search up to 365 days out. Adjust as desired.
+                for i in range(0, 365):
+                    test_date = start_date + datetime.timedelta(days=i)
+                    # If the test_date matches the frequency logic, that's our next run.
+                    if self.is_run_day(test_date, schedule):
+                        return test_date.strftime('%Y-%m-%d')
+
+        return None
+
     def get_monthly_run_days(self, occurrences_per_month: int, month_length: int) -> List[int]:
         """
         Get the run days of the month based on occurrences_per_month.
@@ -321,7 +414,86 @@ class ConfigReader:
                 print(f"Configuration saved successfully to {self.config_file}.")
         except Exception as exc:
             print(f"Error saving configuration: {exc}")
+            
+    def update_next_last_run(
+        self,
+        ota: str,
+        url: str,
+        adults: int,
+        language: str,
+        frequency_type: str,
+        next_run: Optional[str],
+        last_run: Optional[str]
+    ) -> None:
+        """
+        Update the next_run and last_run fields for a specific schedule
+        under a given OTA, URL, adults, language, and frequency_type.
 
+        Args:
+            ota: The OTA name (e.g., "GYG").
+            url: The URL under that OTA to update.
+            adults: The 'adults' field of the configuration to match.
+            language: The 'language' field of the configuration to match.
+            frequency_type: The frequency_type of the schedule to update (e.g., "daily", "weekly").
+            next_run: The new next_run date (YYYY-MM-DD string) or None if no update.
+            last_run: The new last_run date (YYYY-MM-DD string) or None if no update.
+        """
+        try:
+            # Access the specific OTA entry
+            ota_entry = self.config_data['OTAs'][ota]
+        except KeyError:
+            print(f"OTA '{ota}' not found in configuration.")
+            return
+
+        # Iterate through URLs to find the matching one
+        url_found = False
+        for url_entry in ota_entry.get('urls', []):
+            if url_entry.get('url') == url:
+                url_found = True
+                break
+
+        if not url_found:
+            print(f"URL '{url}' not found under OTA '{ota}'. Cannot update.")
+            return
+
+        # Iterate through configurations to find the matching one
+        config_found = False
+        for config in url_entry.get('configurations', []):
+            if config.get('adults') == adults and config.get('language') == language:
+                config_found = True
+                break
+
+        if not config_found:
+            print(f"No configuration found for adults={adults} and language='{language}' under OTA '{ota}', URL '{url}'.")
+            return
+
+        # Iterate through schedules to find the matching frequency_type
+        schedule_found = False
+        for schedule in config.get('schedules', []):
+            if schedule.get('frequency_type') == frequency_type:
+                # Update next_run and last_run if provided
+                if next_run is not None:
+                    schedule['next_run'] = next_run
+                if last_run is not None:
+                    schedule['last_run'] = last_run
+                schedule_found = True
+                print(
+                    f"Updated schedule for OTA='{ota}', URL='{url}', adults={adults}, "
+                    f"language='{language}', frequency='{frequency_type}': "
+                    f"next_run='{next_run}', last_run='{last_run}'."
+                )
+                break
+
+        if not schedule_found:
+            print(
+                f"No schedule with frequency_type='{frequency_type}' found under OTA='{ota}', "
+                f"URL='{url}', adults={adults}, language='{language}'."
+            )
+            return
+
+        # Save the updated configuration back to the YAML file
+        self.save_config()
+        
     def remove_url(self, ota: str, url: str):
         """
         Remove a URL configuration from a specific OTA.
@@ -363,30 +535,57 @@ class ConfigReader:
 
 
     def add_or_update_configuration(self, url_entry: Dict[str, Any], new_config: Dict[str, Any]):
-        """
-        Add or update a configuration in a URL entry.
-        If a configuration with the same adults and language exists, merge or update the schedules.
-        If a schedule with the same frequency_type exists, update it with new values.
-        """
-        existing_configs = url_entry.get('configurations', [])
-        for config in existing_configs:
-            if config.get('adults') == new_config.get('adults') and config.get('language') == new_config.get('language'):
-                # Found existing configuration, now merge or update schedules
-                existing_schedules = config.get('schedules', [])
+            """
+            Add or update a configuration in a URL entry.
+            If a configuration with the same adults and language exists, merge or update the schedules.
+            If a schedule with the same frequency_type exists, update it with new values.
+            Also, set/refresh next_run and ensure last_run is present.
+            """
+            existing_configs = url_entry.get('configurations', [])
+            found_match = False
+
+            for config in existing_configs:
+                # Check if same "adults" and "language"
+                if config.get('adults') == new_config.get('adults') and config.get('language') == new_config.get('language'):
+                    found_match = True
+
+                    # Merge or update schedules
+                    existing_schedules = config.get('schedules', [])
+                    new_schedules = new_config.get('schedules', [])
+
+                    for new_schedule in new_schedules:
+                        frequency_type = new_schedule.get('frequency_type')
+                        existing_schedule = self.get_schedule_by_frequency_type(existing_schedules, frequency_type)
+
+                        if existing_schedule:
+                            # Update existing schedule fields
+                            existing_schedule.update(new_schedule)
+                        else:
+                            # Add new schedule
+                            existing_schedules.append(new_schedule)
+
+                    # After merging schedules, recalc next_run for each schedule
+                    for schedule in existing_schedules:
+                        # Ensure last_run key is present (if not, create it as None)
+                        if 'last_run' not in schedule:
+                            schedule['last_run'] = None
+
+                        # Calculate and update next_run
+                        next_date = self.calculate_next_run_date(schedule)
+                        schedule['next_run'] = next_date or None
+
+                    break  # end for config loop
+
+            if not found_match:
+                # Configuration not found, add new
                 new_schedules = new_config.get('schedules', [])
-                for new_schedule in new_schedules:
-                    frequency_type = new_schedule.get('frequency_type')
-                    # Check if a schedule with the same frequency_type exists
-                    existing_schedule = self.get_schedule_by_frequency_type(existing_schedules, frequency_type)
-                    if existing_schedule:
-                        # Update existing schedule with new values
-                        existing_schedule.update(new_schedule)
-                    else:
-                        # Add new schedule
-                        existing_schedules.append(new_schedule)
-                return  # Configuration updated
-        # Configuration not found, add new configuration
-        existing_configs.append(new_config)
+                for schedule in new_schedules:
+                    # Add next_run/last_run for each new schedule
+                    if 'last_run' not in schedule:
+                        schedule['last_run'] = None
+                    schedule['next_run'] = self.calculate_next_run_date(schedule)
+
+                existing_configs.append(new_config)
 
     def get_schedule_by_frequency_type(self, schedules: List[Dict[str, Any]], frequency_type: str) -> Optional[Dict[str, Any]]:
         """
