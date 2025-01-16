@@ -130,5 +130,5 @@ for index, row in df_to_process.iterrows():
 
 
 # # if historical_review.output_filename:
-    email_sender = EmailSenderAlerts("wojbal3@gmail.com", "N/A", url, "N/A", "N/A", "N/A", logger)
-    email_sender.send_report_email_with_attachment(historical_review.output_filename, overview_html) 
+    # email_sender = EmailSenderAlerts("wojbal3@gmail.com", "N/A", url, "N/A", "N/A", "N/A", logger)
+    # email_sender.send_report_email_with_attachment(historical_review.output_filename, overview_html, historical_review.title_report) 

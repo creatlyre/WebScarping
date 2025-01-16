@@ -99,8 +99,33 @@ class ConfigReader:
         if config:
             return config.get('schedules', [])
         return None
+    
+    def is_schedule_due(self, schedule: Dict[str, Any]) -> bool:
+        """
+        Check if today's date is greater than or equal to the schedule's next_run date.
 
-    def get_highest_order_schedule(self, schedules: List[Dict[str, Any]]) -> (str, int):
+        Args:
+            schedule: Schedule dictionary containing 'next_run'.
+
+        Returns:
+            True if today >= next_run, False otherwise.
+        """
+        next_run_str = schedule.get('next_run')
+        if not next_run_str:
+            print("No 'next_run' specified for the schedule.")
+            return False
+
+        try:
+            next_run_date = datetime.datetime.strptime(next_run_str, '%Y-%m-%d').date()
+        except ValueError:
+            print(f"Invalid date format for next_run: {next_run_str}")
+            return False
+
+        today = datetime.date.today()
+        return today >= next_run_date
+    
+
+    def get_highest_order_schedule(self, schedules: List[Dict[str, Any]]):
         """
         Determine the highest priority schedule that should run today based on days_in_future.
 

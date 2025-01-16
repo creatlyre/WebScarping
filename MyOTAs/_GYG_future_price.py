@@ -1,21 +1,16 @@
 # _GYG_future_price.py
 import os
-import sys
 import time
 import datetime
-import logging
 import traceback
 import shutil
 import glob
-import json
 import calendar
-import re
-
 import pandas as pd
 import numpy as np
-from openpyxl import Workbook, load_workbook
 
 from selenium import webdriver
+
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.chrome.webdriver import WebDriver
 from selenium.webdriver.support import expected_conditions as EC
@@ -24,6 +19,7 @@ from selenium.common.exceptions import (
     NoSuchElementException,
     TimeoutException,
     StaleElementReferenceException,
+    ElementClickInterceptedException
 )
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
@@ -206,6 +202,20 @@ def process_days_not_available(activity_title, language, adults_amount, option_d
         logger.logger_err.error(f"An error occurred in process_days_not_available for URL {url} on date {option_date}: {e}")
         raise
 
+def retry_click_if_intercepted(action, driver, url, max_retries=3):
+    retries = 0
+    while retries < max_retries:
+        try:
+            action()
+            return  # If successful, exit the loop
+        except ElementClickInterceptedException:
+            logger.logger_info.info(f"Click intercepted. Retrying after checking cookies for URL: {url}")
+            check_and_click_only_essential(driver, url)
+            retries += 1
+        except Exception as e:
+            logger.logger_err.error(f"An unexpected error occurred during retry: {e}")
+            raise e
+    raise Exception("Max retries reached. Unable to perform the action.")
 
 def get_future_price(driver, url, viewer, city, language, adults_amount, max_days_to_complete, config):
     """
@@ -239,6 +249,8 @@ def get_future_price(driver, url, viewer, city, language, adults_amount, max_day
         current_year = current_date.year
 
         driver.get(full_url)
+        check_and_click_only_essential(driver, url)
+
         logger.logger_info.info(f'Navigated to URL: {full_url} UNIQUE ID: {url_unique_identifier}')
         logger.logger_info.info(f'Months to complete: {month_to_complete} Picked Max Date {picked_max_date}')
 
@@ -251,12 +263,10 @@ def get_future_price(driver, url, viewer, city, language, adults_amount, max_day
                 logger.logger_info.info(f'Continuing from last processed date: {max_date_done}')
                 full_url = full_url.replace(start_collection_date, max_date_done.strftime('%Y-%m-%d'))
                 driver.get(full_url)
+                check_and_click_only_essential(driver, url)
+
 
         change_currency(driver, url)
-
-        if not clicked_cookies_essentials:
-            time.sleep(4)
-            check_and_click_only_essential(driver, url)
 
         activity_title = get_activity_title(driver, url)
         if not activity_title:
@@ -268,7 +278,8 @@ def get_future_price(driver, url, viewer, city, language, adults_amount, max_day
         check_availability_button = WebDriverWait(booking_tile, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "button[class*='js-check-availability']")))
 
         time.sleep(2)
-        driver.execute_script("arguments[0].click();", check_availability_button)
+        retry_click_if_intercepted(lambda: driver.execute_script("arguments[0].click();", check_availability_button), driver, url)
+        # driver.execute_script("arguments[0].click();", check_availability_button)
         # Handle potential date unavailability
         try:
             WebDriverWait(driver, 5).until(EC.visibility_of_element_located((By.CLASS_NAME, 'dayContainer')))
@@ -379,6 +390,7 @@ def get_future_price(driver, url, viewer, city, language, adults_amount, max_day
     except Exception as e:
         logger.logger_err.error(f"An error occurred in get_future_price for URL {url}: {e}")
         logger.logger_err.error(traceback.format_exc())
+        return "Error"
 
 def get_days_not_available(date_today_obj, picked_max_date_obj, current_year, current_month, days_not_available_elements):
     days_not_available = []
@@ -440,6 +452,7 @@ def check_and_click_only_essential(driver, url):
     """
     Handle the cookie consent popup inside a shadow DOM by clicking 'Only Essential'.
     """
+    time.sleep(1)
     try:
         # Wait for the shadow host to appear
         shadow_host = WebDriverWait(driver, 10).until(
@@ -766,7 +779,10 @@ def main():
                     logger.logger_done.info(f"Data already processed for URL: {url}, Adults: {adults}, Language: {language}")
                 else:
                     logger.logger_done.info(f"Processing URL: {url}, Adults: {adults}, Language: {language}, Frequency: {frequency}, Max Days: {max_days}")
-                    get_future_price(driver, url, viewer, city, language, adults, max_days, config)
+                    prices_colleted = ''
+                    prices_colleted = get_future_price(driver, url, viewer, city, language, adults, max_days, config)
+                    if prices_colleted == 'Error':
+                        continue
                     combinations.add((adults, language))
                     next_run = config_reader.calculate_next_run_date(schedules)
                     last_run = datetime.datetime.now().strftime('%Y-%m-%d')

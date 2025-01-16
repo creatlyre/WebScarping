@@ -4,6 +4,7 @@ from azure.communication.email import EmailClient
 from bs4 import BeautifulSoup
 import base64
 
+ACCESS_KEY = "UN7iDkL+01/1HUHqRVgxYIxUZ4nGh6JUnKUW+x5CE5jGPgR9DLkKb4/EEgX74s1iKinxnaRANqRk6TNDzhyZ5w=="
 
 class EmailSenderAlerts:
     def __init__(self, email_address, product_name, product_url, alert_date, price_before, price_after, logger) -> None:
@@ -13,7 +14,7 @@ class EmailSenderAlerts:
         self.alert_date = alert_date
         self.price_before = price_before
         self.price_after = price_after
-        self.access_key = "UN7iDkL+01/1HUHqRVgxYIxUZ4nGh6JUnKUW+x5CE5jGPgR9DLkKb4/EEgX74s1iKinxnaRANqRk6TNDzhyZ5w=="
+        self.access_key = ACCESS_KEY
         self.logger = logger
 
         # self.send_email()
@@ -120,7 +121,7 @@ class EmailSenderAlerts:
         }
 
         return extracted_data
-    def send_report_email_with_attachment(self, pdf_path, overview_html):
+    def send_report_email_with_attachment(self, pdf_path, overview_html, title_report_pdf):
         """
         Sends an automated scheduled product report email with the given PDF file attached.
         Includes a concise overview of the PDF content in the email body.
@@ -285,7 +286,7 @@ class EmailSenderAlerts:
                 },
                 "attachments": [
                     {
-                        "name": "product_report.pdf",
+                        "name": f"{title_report_pdf}.pdf",
                         "contentType": "application/pdf",
                         "contentInBase64": pdf_base64
                     }
@@ -299,3 +300,111 @@ class EmailSenderAlerts:
 
         except Exception as ex:
             self.logger.logger_err.error(f"Failed to send report email to {self.email_address}: {ex}")
+
+class EmailSenderFuturePriceVerification:
+    def __init__(self, email_address, logger) -> None:
+        self.email_address = email_address
+        self.access_key = ACCESS_KEY
+        self.logger = logger
+
+    def send_email(self, products_due):
+        try:
+            # Azure Communication Services connection string
+            connection_string = f"endpoint=https://cs-emailsender-myotas.germany.communication.azure.com/;accesskey={self.access_key}"
+            client = EmailClient.from_connection_string(connection_string)
+
+            # Use the image URL hosted on Azure Blob Storage
+            logo_url = 'https://sapublicresourcesmyotas.blob.core.windows.net/resources/logo_color.png'
+
+            # Build the list of products into the email body
+            products_list_html = "".join(
+                f"""
+                <tr>
+                    <td style="padding: 10px; border: 1px solid #ddd;">
+                        <a href="{product['url']}" style="color: #1a73e8; text-decoration: none;">{product['url']}</a>
+                    </td>
+                    <td style="padding: 10px; border: 1px solid #ddd;">{product['viewer']}</td>
+                    <td style="padding: 10px; border: 1px solid #ddd;">{product['adults']}</td>
+                    <td style="padding: 10px; border: 1px solid #ddd;">{product['language']}</td>
+                    <td style="padding: 10px; border: 1px solid #ddd;">{product['next_run_due']}</td>
+                    <td style="padding: 10px; border: 1px solid #ddd;">{product['last_run_due']}</td>
+                    <td style="padding: 10px; border: 1px solid #ddd;">{product['frequency_type_due']}</td>
+                    <td style="padding: 10px; border: 1px solid #ddd;">{product['days_in_future_due']}</td>
+                </tr>
+                """
+                for product in products_due
+            )
+
+            products_list_plain = "\n".join(
+                f"- {product['url']} (Viewer: {product['viewer']}, Adults: {product['adults']}, "
+                f"Language: {product['language']}, Next Run: {product['next_run_due']}, Last Run: {product['last_run_due']}, "
+                f"Frequency Type: {product['frequency_type_due']}, Days in Future: {product['days_in_future_due']})"
+                for product in products_due
+            )
+
+            message = {
+                "senderAddress": "DoNotReply@6befcbca-8357-4801-8832-a8e8ffcf5b4c.azurecomm.net",
+                "recipients": {
+                    "to": [{"address": email} for email in self.email_address],
+                },
+                "content": {
+                    "subject": f"MyOTAs - Future Price Check",
+                    "plainText": f"""Hello,
+
+Here are the products that are due for future price collection:
+
+{products_list_plain}
+
+Best regards,
+MyOTAs Team""",
+                    "html": f"""
+                        <html>
+                        <body style="font-family: Arial, sans-serif; color: #333333; line-height: 1.6; margin: 0; padding: 0;">
+                            <table width="100%" style="max-width: 600px; margin: auto; border-collapse: collapse;">
+                                <tr>
+                                    <td style="text-align: center; padding: 20px;">
+                                        <img src="{logo_url}" alt="MyOTAs Logo" style="max-width: 200px; height: auto;">
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 20px; background-color: #ffffff;">
+                                        <h2 style="color: #555555; margin-top: 0;">Upcoming Product Checks</h2>
+                                        <p>Dear Customer,</p>
+                                        <p>The following products are due for checks:</p>
+                                        <table width="100%" style="border-collapse: collapse; margin-top: 10px;">
+                                            <thead>
+                                                <tr>
+                                                    <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Product URL</th>
+                                                    <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Viewer</th>
+                                                    <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Adults</th>
+                                                    <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Language</th>
+                                                    <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Next Run</th>
+                                                    <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Last Run</th>
+                                                    <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Frequency Type</th>
+                                                    <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Days in Future</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {products_list_html}
+                                            </tbody>
+                                        </table>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="text-align: center; padding: 10px; background-color: #f2f2f2; font-size: 12px; color: #888888;">
+                                        <p style="margin: 0;">© {datetime.now().year} MyOTAs. All rights reserved.</p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </body>
+                        </html>
+                    """
+                }
+            }
+
+            poller = client.begin_send(message)
+            result = poller.result()
+            self.logger.logger_info.info(f"Email sent successfully to {self.email_address} with {len(products_due)} products listed.")
+
+        except Exception as ex:
+            self.logger.logger_err.error(f"Failed to send email to {self.email_address}: {ex}")

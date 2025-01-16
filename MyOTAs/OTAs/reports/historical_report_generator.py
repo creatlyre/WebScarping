@@ -15,7 +15,7 @@ import time
 from PIL import Image
 import logging
 import sys
-from scipy.stats import zscore
+import random
 
 # Set the current directory to the script location
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -100,9 +100,13 @@ class HistoricalReportGenerator:
                     return self.connect_to_database(retry_count, max_retries)
                 else:
                     logging.error("Max retries reached. Could not reconnect to the database.")
+                    if self.cnxn:
+                        self.cnxn.close()
                     return None
             else:
                 logging.error(f"Operational error occurred: {str(e)}")
+                if self.cnxn:
+                    self.cnxn.close()
                 return None
 
         except Exception as e:
@@ -240,106 +244,168 @@ class HistoricalReportGenerator:
         price_mean = df_primary['Cena'].mean()
         price_std = df_primary['Cena'].std()
 
-        # Identify date range for specific price changes
-        first_price_date = df_primary['Data zestawienia'].iloc[0].strftime('%Y-%m-%d')
-        last_price_date = df_primary['Data zestawienia'].iloc[-1].strftime('%Y-%m-%d')
-
-        # Identify the biggest price change and when it happened
-        price_diff = df_primary['Cena'].diff().abs().max()
-        idx_of_largest_change = df_primary['Cena'].diff().abs().idxmax()
-        price_change_date = df_primary['Data zestawienia'].iloc[idx_of_largest_change].strftime('%Y-%m-%d')
-
-        # Calculate the largest price change as a percentage
-        previous_price = df_primary['Cena'].iloc[idx_of_largest_change - 1] if idx_of_largest_change > 0 else df_primary['Cena'].iloc[0]
-        price_diff_percentage = (price_diff / previous_price) * 100 if previous_price != 0 else 0
-
-        # Check for price trends (e.g., increasing, decreasing, fluctuating)
-        price_trend = np.polyfit(mdates.date2num(df_primary['Data zestawienia']), df_primary['Cena'], 1)[0]
-
-        # Determine if the price is stable (low standard deviation) or fluctuating
-        if price_std < 1:
-            price_stability_desc = "The price has remained quite stable over time, suggesting steady demand and pricing policies."
-        elif price_trend > 0:
-            price_stability_desc = "The price has been increasing over time, which could indicate rising demand or increasing operational costs."
-        elif price_trend < 0:
-            price_stability_desc = "The price has been decreasing, possibly due to seasonal promotions or reduced demand."
+        total_days = (df_primary['Data zestawienia'].max() - df_primary['Data zestawienia'].min()).days
+        if total_days < 40:
+            # Short single-month explanation
+            price_over_time_desc = (
+                f"This chart shows the price fluctuations for {total_days} days. "
+                f"The lowest price is {self.currency}{price_min:.2f}, "
+                f"the highest is {self.currency}{price_max:.2f}, "
+                f"with an average of {self.currency}{price_mean:.2f}."
+            )
+            return price_over_time_desc
         else:
-            price_stability_desc = "The price has fluctuated significantly, possibly due to seasonal promotions or changes in market conditions."
+            # Identify date range for specific price changes
+            first_price_date = df_primary['Data zestawienia'].iloc[0].strftime('%Y-%m-%d')
+            last_price_date = df_primary['Data zestawienia'].iloc[-1].strftime('%Y-%m-%d')
 
-        # Frequency of price changes
-        change_frequency = df_primary['Cena'].diff().ne(0).sum()
-        if change_frequency > 5:
-            change_freq_desc = f"There have been frequent price adjustments, with {change_frequency} changes recorded over the observed period."
-        else:
-            change_freq_desc = f"There have been only {change_frequency} major price changes during the observed period, indicating long periods of price stability."
+            # Identify the biggest price change and when it happened
+            price_diff = df_primary['Cena'].diff().abs().max()
+            idx_of_largest_change = df_primary['Cena'].diff().abs().idxmax()
+            price_change_date = df_primary['Data zestawienia'].iloc[idx_of_largest_change].strftime('%Y-%m-%d')
 
-        # Magnitude of largest price change
-        largest_change_desc = f"The most significant price change was {self.currency}{price_diff:.2f} ({price_diff_percentage:.2f}%) on {price_change_date}, which may reflect a major market shift or promotional event."
+            # Calculate the largest price change as a percentage
+            previous_price = df_primary['Cena'].iloc[idx_of_largest_change - 1] if idx_of_largest_change > 0 else df_primary['Cena'].iloc[0]
+            price_diff_percentage = (price_diff / previous_price) * 100 if previous_price != 0 else 0
 
-        # Calculate the cumulative price change over the period
-        cumulative_price_change = df_primary['Cena'].iloc[-1] - df_primary['Cena'].iloc[0]
-        cumulative_percentage_change = (cumulative_price_change / df_primary['Cena'].iloc[0]) * 100 if df_primary['Cena'].iloc[0] != 0 else 0
-        if cumulative_price_change > 0:
-            cumulative_change_desc = f"Over the entire period, there was a cumulative price increase of {self.currency}{cumulative_price_change:.2f} ({cumulative_percentage_change:.2f}%)."
-        elif cumulative_price_change < 0:
-            cumulative_change_desc = f"Over the entire period, there was a cumulative price decrease of {self.currency}{abs(cumulative_price_change):.2f} ({abs(cumulative_percentage_change):.2f}%)."
-        else:
-            cumulative_change_desc = "The price remained unchanged over the entire period."
+            # Check for price trends (e.g., increasing, decreasing, fluctuating)
+            price_trend = np.polyfit(mdates.date2num(df_primary['Data zestawienia']), df_primary['Cena'], 1)[0]
 
-        # Identify periods of stability
-        stable_periods = (df_primary['Cena'].diff() == 0).sum()
-        if stable_periods > 0:
-            stability_duration_desc = f"The price remained stable for {stable_periods} days throughout the observed period."
-        else:
-            stability_duration_desc = "There were no long periods of stability, indicating frequent price changes."
-
-        # Check for seasonal price patterns (if the data covers multiple seasons)
-        df_primary['month'] = df_primary['Data zestawienia'].dt.month
-        summer_prices = df_primary[df_primary['month'].isin([6, 7, 8])]['Cena']
-        winter_prices = df_primary[df_primary['month'].isin([12, 1, 2])]['Cena']
-        
-        if not summer_prices.empty and not winter_prices.empty:
-            if summer_prices.mean() > winter_prices.mean():
-                seasonality_desc = "Prices were generally higher during the summer months, indicating increased demand."
-            elif summer_prices.mean() < winter_prices.mean():
-                seasonality_desc = "Prices were lower during the summer months, potentially reflecting off-season discounts."
+            # Determine if the price is stable (low standard deviation) or fluctuating
+            if price_std < 1:
+                price_stability_desc = "The price has remained quite stable over time, suggesting steady demand and pricing policies."
+            elif price_trend > 0:
+                price_stability_desc = "The price has been increasing over time, which could indicate rising demand or increasing operational costs."
+            elif price_trend < 0:
+                price_stability_desc = "The price has been decreasing, possibly due to seasonal promotions or reduced demand."
             else:
-                seasonality_desc = "Prices remained consistent across both summer and winter seasons."
+                price_stability_desc = "The price has fluctuated significantly, possibly due to seasonal promotions or changes in market conditions."
+
+            # Frequency of price changes
+            change_frequency = df_primary['Cena'].diff().ne(0).sum()
+            if change_frequency > 5:
+                change_freq_desc = f"There have been frequent price adjustments, with {change_frequency} changes recorded over the observed period."
+            else:
+                change_freq_desc = f"There have been only {change_frequency} major price changes during the observed period, indicating long periods of price stability."
+
+            # Magnitude of largest price change
+            largest_change_desc = f"The most significant price change was {self.currency}{price_diff:.2f} ({price_diff_percentage:.2f}%) on {price_change_date}, which may reflect a major market shift or promotional event."
+
+            # Calculate the cumulative price change over the period
+            cumulative_price_change = df_primary['Cena'].iloc[-1] - df_primary['Cena'].iloc[0]
+            cumulative_percentage_change = (cumulative_price_change / df_primary['Cena'].iloc[0]) * 100 if df_primary['Cena'].iloc[0] != 0 else 0
+            if cumulative_price_change > 0:
+                cumulative_change_desc = f"Over the entire period, there was a cumulative price increase of {self.currency}{cumulative_price_change:.2f} ({cumulative_percentage_change:.2f}%)."
+            elif cumulative_price_change < 0:
+                cumulative_change_desc = f"Over the entire period, there was a cumulative price decrease of {self.currency}{abs(cumulative_price_change):.2f} ({abs(cumulative_percentage_change):.2f}%)."
+            else:
+                cumulative_change_desc = "The price remained unchanged over the entire period."
+
+            # Identify periods of stability
+            stable_periods = (df_primary['Cena'].diff() == 0).sum()
+            if stable_periods > 0:
+                stability_duration_desc = f"The price remained stable for {stable_periods} days throughout the observed period."
+            else:
+                stability_duration_desc = "There were no long periods of stability, indicating frequent price changes."
+
+            # Check for seasonal price patterns (if the data covers multiple seasons)
+            df_primary['month'] = df_primary['Data zestawienia'].dt.month
+            summer_prices = df_primary[df_primary['month'].isin([6, 7, 8])]['Cena']
+            winter_prices = df_primary[df_primary['month'].isin([12, 1, 2])]['Cena']
+            
+            if not summer_prices.empty and not winter_prices.empty:
+                if summer_prices.mean() > winter_prices.mean():
+                    seasonality_desc = "Prices were generally higher during the summer months, indicating increased demand."
+                elif summer_prices.mean() < winter_prices.mean():
+                    seasonality_desc = "Prices were lower during the summer months, potentially reflecting off-season discounts."
+                else:
+                    seasonality_desc = "Prices remained consistent across both summer and winter seasons."
+            else:
+                seasonality_desc = "No significant seasonal price patterns were observed."
+
+            # Identify months with highest and lowest average prices
+            df_primary['month_year'] = df_primary['Data zestawienia'].dt.to_period('M')
+            avg_price_per_month = df_primary.groupby('month_year')['Cena'].mean()
+            month_with_highest_price = avg_price_per_month.idxmax()
+            highest_avg_price = avg_price_per_month.max()
+            month_with_lowest_price = avg_price_per_month.idxmin()
+            lowest_avg_price = avg_price_per_month.min()
+
+            # Include price trend description
+            if price_trend > 0:
+                trend_desc = "Trend analysis indicates that prices have been increasing over the period, suggesting underlying market conditions are driving prices up."
+            elif price_trend < 0:
+                trend_desc = "Trend analysis indicates that prices have been decreasing over the period, suggesting underlying market conditions are causing prices to fall."
+            else:
+                trend_desc = "Trend analysis indicates that prices have remained stable over the period, suggesting steady market conditions."
+
+            # Determine price volatility description
+            volatility_desc = f"Price volatility, measured by a standard deviation of {self.currency}{price_std:.2f}, indicates {'low' if price_std < 1 else 'high'} variability in pricing."
+
+            # Generate dynamic description for 'Price Over Time' chart
+            price_over_time_desc = (
+                f"This chart illustrates how the price of the tour has evolved over time in the primary category, covering the period from {first_price_date} to {last_price_date}. "
+                f"Throughout this timeframe, the price fluctuated between a low of {self.currency}{price_min:.2f} and a high of {self.currency}{price_max:.2f}, averaging {self.currency}{price_mean:.2f}. "
+                f"{largest_change_desc} {cumulative_change_desc} "
+                f"{trend_desc} "
+                f"{volatility_desc} "
+                f"An analysis of monthly averages reveals that the highest average price occurred in {month_with_highest_price.strftime('%B %Y')}, reaching {self.currency}{highest_avg_price:.2f}, while the lowest was in {month_with_lowest_price.strftime('%B %Y')}, at {self.currency}{lowest_avg_price:.2f}. "
+                f"This suggests potential seasonal trends or market dynamics influencing pricing. "
+                f"{price_stability_desc} {change_freq_desc} {stability_duration_desc} {seasonality_desc}"
+            )
+
+            return price_over_time_desc
+
+    def generate_dynamic_explanations_reviews_over_time(self, df_primary):
+        # Total reviews at the end of the period
+        total_reviews = df_primary['IloscOpini'].iloc[-1]
+        
+        # Calculate the highest daily review increase and the date it occurred
+        df_primary['Daily_Increase'] = df_primary['IloscOpini'].diff()
+        highest_daily_increase = df_primary['Daily_Increase'].max()
+        date_highest_increase = df_primary.loc[df_primary['Daily_Increase'].idxmax(), 'Data zestawienia'].date()
+
+        # Determine the total days in the data range
+        total_days = (df_primary['Data zestawienia'].max() - df_primary['Data zestawienia'].min()).days + 1
+
+        if total_days < 40:
+            # Key insights for short-term data
+            reviews_over_time_desc = (
+                f"This chart shows the trend in the number of reviews over a short period of <strong>{total_days} days</strong>, "
+                f"highlighting recent customer engagement.\n\n"
+                f"By the end of this period, the total number of reviews reached <strong>{int(total_reviews)}</strong>.\n"
+                f"The highest daily increase in reviews was <strong>{int(highest_daily_increase)}</strong> on "
+                f"<strong>{date_highest_increase}</strong>.\n"
+            )
         else:
-            seasonality_desc = "No significant seasonal price patterns were observed."
+            # Group by month and calculate total reviews per month
+            df_primary['Month'] = df_primary['Data zestawienia'].dt.to_period('M')
+            monthly_reviews = df_primary.groupby('Month')['IloscOpini'].max() - df_primary.groupby('Month')['IloscOpini'].min()
+            
+            # Calculate days in each month
+            days_in_month = df_primary['Data zestawienia'].dt.to_period('M').drop_duplicates().dt.days_in_month
 
-        # Identify months with highest and lowest average prices
-        df_primary['month_year'] = df_primary['Data zestawienia'].dt.to_period('M')
-        avg_price_per_month = df_primary.groupby('month_year')['Cena'].mean()
-        month_with_highest_price = avg_price_per_month.idxmax()
-        highest_avg_price = avg_price_per_month.max()
-        month_with_lowest_price = avg_price_per_month.idxmin()
-        lowest_avg_price = avg_price_per_month.min()
+            # Match the days to the monthly_reviews index
+            monthly_avg_reviews = monthly_reviews / days_in_month.values
+            month_highest_avg_reviews = monthly_avg_reviews.idxmax().strftime('%Y-%m')  # Convert to formatted string
+            highest_avg_reviews = monthly_avg_reviews.max()
+            
+            # Identify periods of minimal change (stability in reviews)
+            review_changes = df_primary['IloscOpini'].diff()
+            stable_days = (review_changes.abs() <= 1).sum()
 
-        # Include price trend description
-        if price_trend > 0:
-            trend_desc = "Trend analysis indicates that prices have been increasing over the period, suggesting underlying market conditions are driving prices up."
-        elif price_trend < 0:
-            trend_desc = "Trend analysis indicates that prices have been decreasing over the period, suggesting underlying market conditions are causing prices to fall."
-        else:
-            trend_desc = "Trend analysis indicates that prices have remained stable over the period, suggesting steady market conditions."
-
-        # Determine price volatility description
-        volatility_desc = f"Price volatility, measured by a standard deviation of {self.currency}{price_std:.2f}, indicates {'low' if price_std < 1 else 'high'} variability in pricing."
-
-        # Generate dynamic description for 'Price Over Time' chart
-        price_over_time_desc = (
-            f"This chart illustrates how the price of the tour has evolved over time in the primary category, covering the period from {first_price_date} to {last_price_date}. "
-            f"Throughout this timeframe, the price fluctuated between a low of {self.currency}{price_min:.2f} and a high of {self.currency}{price_max:.2f}, averaging {self.currency}{price_mean:.2f}. "
-            f"{largest_change_desc} {cumulative_change_desc} "
-            f"{trend_desc} "
-            f"{volatility_desc} "
-            f"An analysis of monthly averages reveals that the highest average price occurred in {month_with_highest_price.strftime('%B %Y')}, reaching {self.currency}{highest_avg_price:.2f}, while the lowest was in {month_with_lowest_price.strftime('%B %Y')}, at {self.currency}{lowest_avg_price:.2f}. "
-            f"This suggests potential seasonal trends or market dynamics influencing pricing. "
-            f"{price_stability_desc} {change_freq_desc} {stability_duration_desc} {seasonality_desc}"
-        )
-
-        return price_over_time_desc
+            # Create the dynamic explanation
+            reviews_over_time_desc = (
+                f"This chart illustrates the trend in the number of reviews over time, providing insights into customer engagement.\n\n"
+                f"By the end of the period, the total number of reviews reached <strong>{int(total_reviews)}</strong>.\n"
+                f"The highest daily increase in reviews was <strong>{int(highest_daily_increase)}</strong> on "
+                f"<strong>{date_highest_increase}</strong>.\n"
+                f"The month with the highest average daily reviews was <strong>{month_highest_avg_reviews}</strong>, "
+                f"with an average of <strong>{highest_avg_reviews:.2f}</strong> reviews per day.\n"
+                f"There were <strong>{stable_days}</strong> days with minimal changes in reviews (less than or equal to 1 review difference)."
+            )
+        
+        return reviews_over_time_desc
 
 
 
@@ -480,15 +546,17 @@ class HistoricalReportGenerator:
         df = df.drop_duplicates(subset=['Kategoria', 'Tytul Url', 'Data zestawienia'])
 
         return df
-
     # ------------------------- Analysis Functions ----------------------------
 
     def analyze_data(self, df):
         """
         Performs analysis on the DataFrame and returns summary statistics, plots, and chart explanations.
         """
-        
-        # 3. Count how many discounted days there are in the selected time range
+
+        total_days_collected = (df['Data zestawienia'].max() - df['Data zestawienia'].min()).days
+
+        limited_data = total_days_collected < 40 
+
         discounted_days = df.groupby('Data zestawienia')['IsDiscount'].max().sum()
 
         summary = {
@@ -519,7 +587,17 @@ class HistoricalReportGenerator:
 
         # Filter data for the primary category using .loc to avoid SettingWithCopyWarning
         df_primary = df.loc[df['Kategoria'] == primary_category].copy()
+        df_primary['Review_Increase'] = df_primary['IloscOpini'].diff()
 
+        # Find the maximum daily review increase and the corresponding date
+        if not df_primary['Review_Increase'].isnull().all():
+            highest_daily_review_increase = df_primary['Review_Increase'].max()
+            date_highest_daily_increase = df_primary.loc[df_primary['Review_Increase'].idxmax(), 'Data zestawienia'].date()
+        else:
+            highest_daily_review_increase = None
+            date_highest_daily_increase = None
+
+        df_primary = df_primary.drop(columns=['Review_Increase'])
         # Ensure 'Data zestawienia' is datetime
         if df_primary['Data zestawienia'].dtype != 'datetime64[ns]':
             df_primary['Data zestawienia'] = pd.to_datetime(df_primary['Data zestawienia'], errors='coerce')
@@ -543,8 +621,12 @@ class HistoricalReportGenerator:
         plt.title('Price Over Time', color='#0073B1')  # DARK_BLUE
         plt.xlabel('Date')
         plt.ylabel(f'Price ({self.currency})')
-        plt.gca().xaxis.set_major_locator(mdates.MonthLocator(interval=1))
-        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+        if limited_data:
+            plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=1))  # Show every day
+            plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        else:
+            plt.gca().xaxis.set_major_locator(mdates.MonthLocator(interval=1))  # Show every month
+            plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
         plt.xticks(rotation=45, ha='right')
         plt.tight_layout()
         price_over_time_img = BytesIO()
@@ -554,6 +636,8 @@ class HistoricalReportGenerator:
         plots['Price Over Time'] = Image.open(price_over_time_img)
 
         price_over_time_desc = self.generate_dynamic_explanations_price_over_time(df_primary)
+        reviews_over_time_desc = self.generate_dynamic_explanations_reviews_over_time(df_primary)
+
 
         # Plot Discounted Price 
 
@@ -611,10 +695,12 @@ class HistoricalReportGenerator:
 
         # Improve date formatting on X-axis
         ax = plt.gca()
-        locator = mdates.MonthLocator(interval=1)
-        formatter = mdates.DateFormatter('%Y-%m')
-        ax.xaxis.set_major_locator(locator)
-        ax.xaxis.set_major_formatter(formatter)
+        if limited_data:
+            plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=1))  # Show every day
+            plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        else:
+            plt.gca().xaxis.set_major_locator(mdates.MonthLocator(interval=1))  # Show every month
+            plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
         plt.xticks(rotation=45, ha='right')
 
         plt.tight_layout()
@@ -626,10 +712,11 @@ class HistoricalReportGenerator:
 
         # Check if 'Booked' column has data
         if df_primary['Booked'].notna().any():
+            total_days_in_period = (df_primary['Data zestawienia'].max() - df_primary['Data zestawienia'].min()).days + 1
             # Handle Booked Data Analysis
             booked_summary = {
                 'Total Bookings': df_primary['Booked'].sum(),
-                'Average Bookings per Day': df_primary['Booked'].mean(),
+                'Average Bookings per Day': round(df_primary['Booked'].sum() / total_days_in_period, 2),  
                 'Max Bookings in a Day': df_primary['Booked'].max(),
                 'Date with Max Bookings': df_primary.loc[df_primary['Booked'].idxmax(), 'Data zestawienia'].date()
             }
@@ -655,10 +742,12 @@ class HistoricalReportGenerator:
 
             # Improve date formatting on X-axis
             ax = plt.gca()
-            locator = mdates.MonthLocator(interval=1)
-            formatter = mdates.DateFormatter('%Y-%m')
-            ax.xaxis.set_major_locator(locator)
-            ax.xaxis.set_major_formatter(formatter)
+            if limited_data:
+                plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=1))  # Show every day
+                plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+            else:
+                plt.gca().xaxis.set_major_locator(mdates.MonthLocator(interval=1))  # Show every month
+                plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
             plt.xticks(rotation=45, ha='right')
 
             plt.tight_layout()
@@ -670,50 +759,61 @@ class HistoricalReportGenerator:
         else:
             booked_summary = None
 
-      # Analyze Reviews Increase per Month based on Primary Category
         df_primary.set_index('Data zestawienia', inplace=True)
-        reviews_monthly_primary = df_primary['IloscOpini'].resample('ME').sum().reset_index()
-        reviews_monthly_primary.rename(columns={'IloscOpini': 'Total Reviews'}, inplace=True)
+      # Analyze Reviews Increase per Month based on Primary Category
+        if not limited_data:
+                # Resample and calculate monthly reviews
+            
+            reviews_monthly_primary = df_primary['IloscOpini'].resample('ME').sum().reset_index()
+            reviews_monthly_primary.rename(columns={'IloscOpini': 'Total Reviews'}, inplace=True)
+            # Custom percentage change calculation to handle zero division
+            reviews_monthly_primary['Review_Increase'] = reviews_monthly_primary['Total Reviews'].diff() / reviews_monthly_primary['Total Reviews'].shift(1)
+            reviews_monthly_primary['Review_Increase'] = reviews_monthly_primary['Review_Increase'].fillna(0).replace([float('inf'), -float('inf')], None) * 100
 
-        # Custom percentage change calculation to handle zero division
-        reviews_monthly_primary['Review_Increase'] = reviews_monthly_primary['Total Reviews'].diff() / reviews_monthly_primary['Total Reviews'].shift(1)
-        reviews_monthly_primary['Review_Increase'] = reviews_monthly_primary['Review_Increase'].fillna(0).replace([float('inf'), -float('inf')], None) * 100
 
+            # Custom percentage change calculation to handle zero division
+            reviews_monthly_primary['Review_Increase'] = (
+                (reviews_monthly_primary['Total Reviews'].diff()) / reviews_monthly_primary['Total Reviews'].shift(1)
+            )
+            reviews_monthly_primary['Review_Increase'] = (
+                reviews_monthly_primary['Review_Increase']
+                .replace([float('inf'), -float('inf')], None)  # Replace inf values with None
+                .fillna(0)  # Replace NaN with 0
+                * 100  # Convert to percentage
+            )
 
-        # Custom percentage change calculation to handle zero division
-        reviews_monthly_primary['Review_Increase'] = (
-            (reviews_monthly_primary['Total Reviews'].diff()) / reviews_monthly_primary['Total Reviews'].shift(1)
-        )
-        reviews_monthly_primary['Review_Increase'] = (
-            reviews_monthly_primary['Review_Increase']
-            .replace([float('inf'), -float('inf')], None)  # Replace inf values with None
-            .fillna(0)  # Replace NaN with 0
-            * 100  # Convert to percentage
-        )
+            # Insights for Reviews MoM
+            average_mom_review_increase = reviews_monthly_primary['Review_Increase'].mean()
+            highest_mom_review_increase = reviews_monthly_primary['Review_Increase'].max()
 
-        # Insights for Reviews MoM
-        average_mom_review_increase = reviews_monthly_primary['Review_Increase'].mean()
-        highest_mom_review_increase = reviews_monthly_primary['Review_Increase'].max()
-
-        if not reviews_monthly_primary['Review_Increase'].isnull().all():
-            month_highest_mom_review_increase = reviews_monthly_primary.loc[reviews_monthly_primary['Review_Increase'].idxmax(), 'Data zestawienia'].date()
+            if not reviews_monthly_primary['Review_Increase'].isnull().all():
+                month_highest_mom_review_increase = reviews_monthly_primary.loc[reviews_monthly_primary['Review_Increase'].idxmax(), 'Data zestawienia'].date()
+            else:
+                highest_mom_review_increase = None
+                month_highest_mom_review_increase = None
         else:
+            average_mom_review_increase = None
             highest_mom_review_increase = None
             month_highest_mom_review_increase = None
+
 
         # Package MoM Insights into review_stats
         review_stats = {
             'Average Review Increase per Day': round(average_review_increase_per_day, 2),
             'MoM Average Review Increase (%)': average_mom_review_increase,
             'MoM Highest Review Increase (%)': highest_mom_review_increase,
-            'Month with Highest MoM Review Increase': month_highest_mom_review_increase
+            'Month with Highest MoM Review Increase': month_highest_mom_review_increase,
+            'Highest Daily Review Increase': highest_daily_review_increase,
+            'Date of Highest Daily Review Increase': date_highest_daily_increase
         }
 
-
+        df_primary = df_primary.drop(columns=['Daily_Increase'])
+        if not limited_data:
+            df_primary = df_primary.drop(columns=['Month'])
         # Analyze Bookings MoM if booked_summary exists
         if booked_summary:
             # Resample and calculate monthly bookings
-            bookings_monthly_primary = df_primary['Booked'].resample('M').sum().reset_index()
+            bookings_monthly_primary = df_primary.resample('M').sum().reset_index()
             bookings_monthly_primary.rename(columns={'Booked': 'Total Bookings'}, inplace=True)
 
             # Custom percentage change calculation to handle zero division
@@ -728,13 +828,17 @@ class HistoricalReportGenerator:
             )
 
             # Insights for Bookings MoM
-            average_mom_booking_increase = bookings_monthly_primary['Booking_Increase'].mean()
-            highest_mom_booking_increase = bookings_monthly_primary['Booking_Increase'].max()
-            
-            if not bookings_monthly_primary['Booking_Increase'].isnull().all():
-                month_highest_mom_booking_increase = bookings_monthly_primary.loc[
-                    bookings_monthly_primary['Booking_Increase'].idxmax(), 'Data zestawienia'
-                ].date()
+            if not limited_data:
+                average_mom_booking_increase = bookings_monthly_primary['Booking_Increase'].mean()
+                highest_mom_booking_increase = bookings_monthly_primary['Booking_Increase'].max()
+                
+                if not bookings_monthly_primary['Booking_Increase'].isnull().all():
+                    month_highest_mom_booking_increase = bookings_monthly_primary.loc[
+                        bookings_monthly_primary['Booking_Increase'].idxmax(), 'Data zestawienia'
+                    ].date()
+                else:
+                    highest_mom_booking_increase = None
+                    month_highest_mom_booking_increase = None
             else:
                 highest_mom_booking_increase = None
                 month_highest_mom_booking_increase = None
@@ -761,17 +865,19 @@ class HistoricalReportGenerator:
 
 
         # Additional Insights: Price Distribution
-        plt.figure(figsize=(10, 6))
-        sns.histplot(df_primary['Cena'], kde=True, bins=30, color='blue')
-        plt.title('Price Distribution')
-        plt.xlabel(f'Price ({self.currency})')
-        plt.ylabel('Frequency')
-        plt.tight_layout()
-        price_distribution_img = BytesIO()
-        plt.savefig(price_distribution_img, format='PNG')
-        plt.close()
-        price_distribution_img.seek(0)
-        plots['Price Distribution'] = Image.open(price_distribution_img)
+        bin_count = min(30, len(df_primary['Cena'].unique()))
+        if bin_count > 1:
+            plt.figure(figsize=(10, 6))
+            sns.histplot(df_primary['Cena'], kde=True, bins=bin_count, color='blue')
+            plt.title('Price Distribution')
+            plt.xlabel(f'Price ({self.currency})')
+            plt.ylabel('Frequency')
+            plt.tight_layout()
+            price_distribution_img = BytesIO()
+            plt.savefig(price_distribution_img, format='PNG')
+            plt.close()
+            price_distribution_img.seek(0)
+            plots['Price Distribution'] = Image.open(price_distribution_img)
 
         # Additional Insights: Correlation between Price and Number of Reviews
         plt.figure(figsize=(10, 6))
@@ -792,23 +898,24 @@ class HistoricalReportGenerator:
         price_reviews_correlation_img.seek(0)
         plots['Price vs. Reviews Correlation'] = Image.open(price_reviews_correlation_img)
 
-        # Additional Insights: Moving Average of Reviews
-        df_primary_sorted = df_primary.sort_index()
-        df_primary_sorted['Reviews_MA_3'] = df_primary_sorted['IloscOpini'].rolling(window=3).mean()
+        if not limited_data:
+            # Additional Insights: Moving Average of Reviews
+            df_primary_sorted = df_primary.sort_index()
+            df_primary_sorted['Reviews_MA_3'] = df_primary_sorted['IloscOpini'].rolling(window=3).mean()
 
-        plt.figure(figsize=(12, 6))
-        sns.lineplot(data=df_primary_sorted, x=df_primary_sorted.index, y='IloscOpini', marker='o', label='Number of Reviews')
-        sns.lineplot(data=df_primary_sorted, x=df_primary_sorted.index, y='Reviews_MA_3', marker='x', label='3-Month Moving Average', color='red')
-        plt.title('Number of Reviews with 3-Month Moving Average')
-        plt.xlabel('Date')
-        plt.ylabel('Number of Reviews')
-        plt.legend()
-        plt.tight_layout()
-        reviews_moving_average_img = BytesIO()
-        plt.savefig(reviews_moving_average_img, format='PNG')
-        plt.close()
-        reviews_moving_average_img.seek(0)
-        plots['Reviews Moving Average'] = Image.open(reviews_moving_average_img)
+            plt.figure(figsize=(12, 6))
+            sns.lineplot(data=df_primary_sorted, x=df_primary_sorted.index, y='IloscOpini', marker='o', label='Number of Reviews')
+            sns.lineplot(data=df_primary_sorted, x=df_primary_sorted.index, y='Reviews_MA_3', marker='x', label='3-Month Moving Average', color='red')
+            plt.title('Number of Reviews with 3-Month Moving Average')
+            plt.xlabel('Date')
+            plt.ylabel('Number of Reviews')
+            plt.legend()
+            plt.tight_layout()
+            reviews_moving_average_img = BytesIO()
+            plt.savefig(reviews_moving_average_img, format='PNG')
+            plt.close()
+            reviews_moving_average_img.seek(0)
+            plots['Reviews Moving Average'] = Image.open(reviews_moving_average_img)
 
         # Additional Analysis: Category Distribution using Matplotlib's pie
         plt.figure(figsize=(8, 8))
@@ -845,7 +952,7 @@ class HistoricalReportGenerator:
         # Chart explanations
         chart_explanations = {
             'Price Over Time': f'{price_over_time_desc}',
-            'Number of Reviews Over Time': 'This chart illustrates the trend in the number of reviews per day over time for the primary category, reflecting customer engagement and satisfaction levels.',
+            'Number of Reviews Over Time': f'{reviews_over_time_desc}',
             'Number of Bookings Over Time': 'This chart shows the trend in the number of bookings per day over time for the primary category, indicating customer purchasing behavior.',
             'Price Distribution': 'This chart shows the distribution of prices for the tour within the primary category, indicating the most common price points.',
             'Price vs. Reviews Correlation': 'This chart explores the correlation between price and the number of reviews for the primary category, suggesting how pricing may affect customer engagement.',
@@ -957,6 +1064,12 @@ class HistoricalReportGenerator:
             f"  </tr>\n"
         )
 
+        if review_stats['Highest Daily Review Increase'] is not None:
+            insight += f"  <tr>\n" \
+                    f"    <td><strong>Highest Daily Review Increase:</strong></td>\n" \
+                    f"    <td>{review_stats['Highest Daily Review Increase']:.2f} on {review_stats['Date of Highest Daily Review Increase']}</td>\n" \
+                    f"  </tr>\n"
+
         if review_stats['MoM Highest Review Increase (%)'] is not None:
             insight += f"  <tr>\n" \
                     f"    <td><strong>Highest MoM Review Increase (%)</strong></td>\n" \
@@ -1059,9 +1172,10 @@ class HistoricalReportGenerator:
                 )
 
         # Comparative Insights (Month-over-Month Performance)
-        insight += (
-            f"  <li><strong>Comparative Performance:</strong> The number of reviews has shown an average MoM increase of <strong>{review_stats['MoM Average Review Increase (%)']:.2f}%</strong>, with the highest increase of <strong>{review_stats['MoM Highest Review Increase (%)']:.2f}%</strong> in <strong>{review_stats['Month with Highest MoM Review Increase']}</strong>.</li>\n"
-        )
+        if review_stats['MoM Highest Review Increase (%)'] is not None:
+            insight += (
+                f"  <li><strong>Comparative Performance:</strong> The number of reviews has shown an average MoM increase of <strong>{review_stats['MoM Average Review Increase (%)']:.2f}%</strong>, with the highest increase of <strong>{review_stats['MoM Highest Review Increase (%)']:.2f}%</strong> in <strong>{review_stats['Month with Highest MoM Review Increase']}</strong>.</li>\n"
+            )
 
         if booked_summary and booked_summary['MoM Average Booking Increase (%)'] is not None:
             insight += (
@@ -1533,7 +1647,7 @@ class HistoricalReportGenerator:
         # Check if wkhtmltopdf exists at the specified path
         if not os.path.exists(self.WKHTMLTOPDF_PATH):
             logging.error(f"wkhtmltopdf not found at {self.WKHTMLTOPDF_PATH}. Please verify the path.")
-            return
+            raise FileNotFoundError(f"wkhtmltopdf not found at {self.WKHTMLTOPDF_PATH}. Please verify the path.")
 
         # Configure PDFkit options
         config = pdfkit.configuration(wkhtmltopdf=self.WKHTMLTOPDF_PATH)
@@ -1665,10 +1779,13 @@ class HistoricalReportGenerator:
             report_title = df['Tytul'].iloc[0] if not df['Tytul'].isnull().all() else "Historical Summary Report"
 
             # Generate PDF file name based on 'Tytul'
+            random_uuid = str(random.randint(1000, 9999))
             if viewer:
-                output_filename = f"PDF_reports/" + viewer + "_" + self.sanitize_filename(report_title) + '.pdf'
+                output_filename = f"PDF_reports/" + viewer + "_" + self.sanitize_filename(report_title) + "_" + random_uuid +'.pdf'
+                current_year_month = datetime.now().strftime('%Y-%m')
+                self.title_report =  f"{current_year_month}_{self.sanitize_filename(report_title)}"
             else:
-                output_filename = "PDF_reports/" + self.sanitize_filename(report_title) + '.pdf'
+                output_filename = "PDF_reports/" + self.sanitize_filename(report_title) + "_" + random_uuid + '.pdf'
 
             # Prepare introduction text
             introduction_text = (
