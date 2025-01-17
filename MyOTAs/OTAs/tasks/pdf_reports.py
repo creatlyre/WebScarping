@@ -94,6 +94,9 @@ for index, row in df_to_process.iterrows():
     city = row['City']
     ota = url.split('.com')[0].split('www.')[-1]
     date_filter = row['date_filter']
+    email = row['email']
+    if len(email) < 2:
+        email = 'wojbal3@gmail.com'
     if ota == 'getyourguide':
         ota = 'GetYourGuide' 
     else:
@@ -130,5 +133,5 @@ for index, row in df_to_process.iterrows():
 
 
 # # if historical_review.output_filename:
-    # email_sender = EmailSenderAlerts("wojbal3@gmail.com", "N/A", url, "N/A", "N/A", "N/A", logger)
-    # email_sender.send_report_email_with_attachment(historical_review.output_filename, overview_html, historical_review.title_report) 
+    email_sender = EmailSenderAlerts(email, "N/A", url, "N/A", "N/A", "N/A", logger)
+    email_sender.send_report_email_with_attachment(historical_review.output_filename, overview_html, historical_review.title_report) 

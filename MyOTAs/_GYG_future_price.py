@@ -293,8 +293,14 @@ def get_future_price(driver, url, viewer, city, language, adults_amount, max_day
                     if day.text == "" or len(day.text) == 0:
                         logger.logger_info.info("Day was empty")
                         continue
+                    driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", day)
                     ActionChains(driver).move_to_element(day).perform()
-                    day.click()
+                    try:
+                        day.click()
+                    except:
+                        driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", day)
+                        day.click()
+
                     driver.execute_script("arguments[0].click();", check_availability_button)
                     empty = False
                     break
@@ -452,7 +458,7 @@ def check_and_click_only_essential(driver, url):
     """
     Handle the cookie consent popup inside a shadow DOM by clicking 'Only Essential'.
     """
-    time.sleep(1)
+    time.sleep(2)
     try:
         # Wait for the shadow host to appear
         shadow_host = WebDriverWait(driver, 10).until(

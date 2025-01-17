@@ -37,7 +37,6 @@ def main():
 
                 for schedule in schedules:
                     is_due = config_reader.is_schedule_due(schedule=schedule)
-                    is_due = True
                     if is_due:
                         next_run_due = schedule['next_run']
                         last_run_due = schedule['last_run']
