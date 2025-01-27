@@ -7,49 +7,46 @@ class LoggerManager:
         self.logs_path = file_manager.logs_path
         self.ensure_log_folder_exists()  # Ensure log folder exists
 
-        # Create logger objects for error, info, and done logs
-        self.logger_err = logging.getLogger(f'Error_logger')
-        self.logger_err.setLevel(logging.DEBUG)
-
-        self.logger_info = logging.getLogger(f'Info_logger')
-        self.logger_info.setLevel(logging.DEBUG)
-
-        self.logger_done = logging.getLogger(f'Done_logger')
-        self.logger_done.setLevel(logging.DEBUG)
-
-        # Create handlers
-        self.ch = logging.StreamHandler()
-        self.ch.setLevel(logging.DEBUG)
-
-        # Dynamically create paths for each log type based on current year/month
+         # Dynamically create paths for each log type based on current year/month
         current_log_path = self.get_current_log_path()
-        self.fh_error = logging.FileHandler(os.path.join(current_log_path, f'{application}_error_logs.log'))
-        self.fh_error.setLevel(logging.DEBUG)
+        
+        # Define log files for each logger
+        self.error_log_file = os.path.join(current_log_path, f'{application}_error_logs.log')
+        self.info_log_file = os.path.join(current_log_path, f'{application}_info_logs.log')
+        self.done_log_file = os.path.join(current_log_path, f'{application}_done_logs.log')
 
-        self.fh_info = logging.FileHandler(os.path.join(current_log_path, f'{application}_info_logs.log'))
-        self.fh_info.setLevel(logging.INFO)
+        # Set up loggers
+        self.logger_err = self.get_or_create_logger('Error_logger', self.error_log_file, level=logging.DEBUG)
+        self.logger_info = self.get_or_create_logger('Info_logger', self.info_log_file, level=logging.DEBUG)
+        self.logger_done = self.get_or_create_logger('Done_logger', self.done_log_file, level=logging.INFO)
 
-        self.fh_done = logging.FileHandler(os.path.join(current_log_path, f'{application}_done_logs.log'))
-        self.fh_done.setLevel(logging.INFO)
+    def get_or_create_logger(self, logger_name, log_file, level=logging.INFO):
+        """Creates or retrieves a logger, ensuring no duplicate handlers."""
+        logger = logging.getLogger(logger_name)
+        if not logger.hasHandlers():  # Check if the logger already has handlers
+            logger.setLevel(level)
 
-        # Create formatter
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            # File handler
+            file_handler = logging.FileHandler(log_file)
+            file_handler.setLevel(level)
 
-        # Add formatter to handlers
-        self.ch.setFormatter(formatter)
-        self.fh_error.setFormatter(formatter)
-        self.fh_info.setFormatter(formatter)
-        self.fh_done.setFormatter(formatter)
+            # Stream handler (console output)
+            stream_handler = logging.StreamHandler()
+            stream_handler.setLevel(level)
 
-        # Add handlers to loggers
-        self.logger_err.addHandler(self.ch)
-        self.logger_err.addHandler(self.fh_error)
+            # Formatter
+            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            file_handler.setFormatter(formatter)
+            stream_handler.setFormatter(formatter)
 
-        self.logger_info.addHandler(self.ch)
-        self.logger_info.addHandler(self.fh_info)
+            # Add handlers to logger
+            logger.addHandler(file_handler)
+            logger.addHandler(stream_handler)
 
-        self.logger_done.addHandler(self.ch)
-        self.logger_done.addHandler(self.fh_done)
+            # Optional: Disable propagation to prevent duplicates in root logger
+            logger.propagate = False
+        
+        return logger
 
     def get_current_log_path(self):
         """Returns the path for the current year's and month's logs."""
@@ -70,16 +67,8 @@ class LoggerManager:
 
     def close_logger(self):
         """Closes all handlers for each logger to release resources."""
-        for handler in self.logger_err.handlers[:]:
-            handler.close()
-            self.logger_err.removeHandler(handler)
-        
-        for handler in self.logger_info.handlers[:]:
-            handler.close()
-            self.logger_info.removeHandler(handler)
-
-        for handler in self.logger_done.handlers[:]:
-            handler.close()
-            self.logger_done.removeHandler(handler)
+        for logger in [self.logger_err, self.logger_info, self.logger_done]:
+            for handler in logger.handlers[:]:
+                handler.close()
+                logger.removeHandler(handler)
         print("All loggers closed successfully.")
-# %

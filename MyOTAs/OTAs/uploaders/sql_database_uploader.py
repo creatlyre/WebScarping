@@ -59,6 +59,8 @@ class SQLTableUpload():
             table_name = 'Operators_Headout'
         elif 'Viator' in path_df_main:
             table_name = 'Operators_Viator'
+        elif 'Tripadvisor' in path_df_main:
+            table_name = 'Operators_Tripadvisor'
         df_main = df_main.drop_duplicates(subset=['uid'])
         self.logger.logger_info.info(f"Using table {table_name} for upsert operation.")
 

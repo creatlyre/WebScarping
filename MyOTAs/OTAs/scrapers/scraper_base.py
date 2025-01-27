@@ -230,8 +230,14 @@ class ScraperBase:
         # Extract the date from the Excel file name
         date_from_filename = os.path.basename(excel_file_path).split(' - ')[1].split(".")[0]
 
-        # Read all sheets from the Excel file into a single DataFrame
-        df_day = pd.concat(pd.read_excel(excel_file_path, sheet_name=None), ignore_index=True)
+        # Read all sheets except the "DONE" sheet
+        all_sheets = pd.read_excel(excel_file_path, sheet_name=None)
+
+        # Exclude the "DONE" sheet
+        filtered_sheets = {name: sheet for name, sheet in all_sheets.items() if name != "DONE"}
+
+        # Concatenate the remaining sheets into a single DataFrame
+        df_day = pd.concat(filtered_sheets.values(), ignore_index=True)
 
         # Rename columns in df_day to match df_oper
         df_day.rename(columns={
@@ -264,7 +270,7 @@ class ScraperBase:
 
         # Update 'Date update' for matched links
         df_oper_updated.loc[df_oper_updated['Reviews'].notnull(), 'Date update'] = datetime.datetime.strptime(date_from_filename, '%Y-%m-%d')
-
+        
         # Merge df_oper on top of df_day
         merged_df = pd.concat([df_oper_updated, df_day], ignore_index=True)
 
@@ -286,6 +292,12 @@ class ScraperBase:
         elif "Musement" in file_path:
             merged_df['Reviews'] = merged_df['Reviews'].apply(lambda x: str(x).lower().replace('(', '').replace(')', '').replace('reviews', '') if len(str(x)) > 0 else '0')
             merged_df['uid'] = merged_df['Link'].apply(lambda x: str(x).split('-')[-1].replace('/', ''))
+        elif "Tripadvisor" in file_path:
+            merged_df['Reviews'] = merged_df['Reviews'].map(lambda x: x.replace(",", '') if isinstance(x, str) else x)
+            merged_df['uid'] = merged_df['Link'].apply(lambda x: str(x).split('AttractionProductReview-')[-1].split('-')[2])
+            merged_df['Tytul'] = merged_df['Tytul'].str.replace(r'^\d+\.\s*', '', regex=True)
+
+
         else:
             merged_df['uid'] = merged_df['Link'].apply(lambda x: str(x).split('/')[-1])
 

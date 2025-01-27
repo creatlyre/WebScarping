@@ -14,7 +14,7 @@ from logger.logger_manager import LoggerManager
 
 
 sql_connectors = ConnectorsSQL_OTA()
-sites = ["GYG", "Musement", "Viator"]
+sites = ['Tripadvisor', "GYG", "Musement", "Viator"]
 for site in sites:
     file_manager = FilePathManager(site, 'N/A')
     logger = LoggerManager(file_manager, 'operator_update')

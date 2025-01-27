@@ -42,7 +42,7 @@ class AzureBlobUploader:
             return True
         except ValueError:
             return False
-        
+
     def transform_upload_to_refined(self):
         """
         Transforms and uploads the Excel file to Azure Blob Storage under the "refined" container.
@@ -101,6 +101,12 @@ class AzureBlobUploader:
 
 
                     # Apply str.replace only if the value is a string
+
+                    if self.file_manager.site == 'Tripadvisor':
+                        df['Opinia'] = df['Opinia'].str.extract(r'(\d\.\d)')
+                        df['Opinia'].astype(float)
+                        df['Tytul'] = df['Tytul'].str.replace(r'^\d+\.\s*', '', regex=True)
+                        df['IloscOpini'] = df['IloscOpini'].map(lambda x: x.replace(",", '') if isinstance(x, str) else x)
 
 
                     df.to_excel(writer, sheet_name=sheet_name, index=False)

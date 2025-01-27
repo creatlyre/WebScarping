@@ -603,6 +603,7 @@ def transform_upload_to_refined(local_file_path, storage_account_name, storage_a
         df['price_per_person'] = df['price_per_person'].replace('Not Available', np.nan)
         df['total_price'] = df['total_price'].str.replace(r'[$€£]', '', regex=True).str.replace(',', '').str.strip()
         df['city'] = df['city'].str.title()
+        df = df[~df['date'].apply(lambda x: x.lower().startswith('https://www.getyourguide'))]
 
         output_file_path = "temp_modified_excel.xlsx"
 

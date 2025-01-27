@@ -19,9 +19,48 @@ from selenium.webdriver.support.ui import Select
 from bs4 import BeautifulSoup
 import traceback
 import re
+from typing import List
 
 from scrapers.scraper_base import ScraperBase
 
+class DataExtractionError(Exception):
+    """Base exception for data extraction errors."""
+    pass
+
+class ElementNotFoundError(DataExtractionError):
+    """Exception raised when a required HTML element is not found."""
+    def __init__(self, element_name: str):
+        self.element_name = element_name
+        self.message = f"Required element '{element_name}' not found."
+        super().__init__(self.message)
+
+class PriceExtractionError(DataExtractionError):
+    """Exception raised when price extraction fails."""
+    def __init__(self, detail: str):
+        self.detail = detail
+        self.message = f"Price extraction failed: {detail}"
+        super().__init__(self.message)
+
+class PositionCalculationError(DataExtractionError):
+    """Exception raised when position calculation fails."""
+    def __init__(self, detail: str):
+        self.detail = detail
+        self.message = f"Position calculation failed: {detail}"
+        super().__init__(self.message)
+
+# Helper function to extract text safely
+def safe_get_text(element, element_name: str) -> str:
+    if element:
+        return element.get_text(strip=True)
+    else:
+        raise ElementNotFoundError(element_name)
+    
+# Helper function to extract text safely
+def safe_get_text(element, element_name: str) -> str:
+    if element:
+        return element.get_text(strip=True)
+    else:
+        raise ElementNotFoundError(element_name)
 
 class ScraperGYG(ScraperBase):
     
@@ -301,7 +340,14 @@ class ScraperGYG(ScraperBase):
         self.logger.logger_info.info("Defaulting max pages to 5 due to inability to determine dynamically.")
         return 5
 
-    def _extract_product_data(self, tour_item: BeautifulSoup, page: int, position: int, city: str, category: str) -> list:
+    def _extract_product_data(
+        self, 
+        tour_item: BeautifulSoup, 
+        page: int, 
+        position: int, 
+        city: str, 
+        category: str
+    ) -> List[str]:
         """
         Extracts relevant product data from a single tour item.
 
@@ -315,124 +361,330 @@ class ScraperGYG(ScraperBase):
         Returns:
             list: A list of extracted product data fields.
         """
+        # Initialize product data with default 'N/A' values
+        product_data = [
+            'N/A',  # title
+            'N/A',  # product_url
+            'N/A',  # price
+            'N/A',  # stars
+            'N/A',  # amount_reviews
+            'N/A',  # discount
+            'N/A',  # raw_text
+            self.date_today,
+            position,
+            category,
+            'N/A',  # booked
+            'GYG',
+            city
+        ]
+
         try:
-            # Initialize default values
-            title = 'N/A'
-            price = 'N/A'
-            product_url = 'N/A'
-            discount = 'N/A'
-            amount_reviews = 'N/A'
-            stars = 'N/A'
-            booked = 'N/A'
-            new_activity = 'N/A'
-
-            # Extract title
-            title_element = tour_item.find('h3', {'class': 'vertical-activity-card__title'})
-            if title_element:
-                title = title_element.get_text(strip=True)
-                self.logger.logger_info.debug(f"Extracted title: {title}")
-            else:
-                self.logger.logger_err.error("Title element not found.")
-
-            # Extract price and discount
-            price_element = tour_item.find('div', {'class': 'activity-price'})
-            discount_element = price_element.find_all('div', {'class': 'activity-price__text'})
-
-            if len(discount_element) == 2:
-                # Check for the element with actual content
-                discount_texts = [el.get_text(strip=True) for el in discount_element if el.get_text(strip=True)]
-                if len(discount_texts) == 2:
-                    price = discount_texts[0]
-                    discount = discount_texts[1]
-                elif len(discount_texts) == 1:
-                    price = discount_texts[0]
-                    discount = "N/A"
-                else:
-                    self.logger.logger_err.error("Price element not found.")
-                    raise ("Price element not found.")
-                    
-
-                self.logger.logger_info.debug(f"Extracted price: {price}")
-                self.logger.logger_info.debug(f"Extracted discount: {discount}")
-            else:
-                # Extract price if discount not available
-                if price_element:
-                    price = price_element.get_text(strip=True)
-                    self.logger.logger_info.debug(f"Extracted price: {price}")
-                else:
-                    self.logger.logger_err.error("Price element not found.")
-                    
-                self.logger.logger_info.debug("No discount found; set to 'N/A'.")
-            # Extract product URL
-            link_element = tour_item.find('a', href=True)
-            if link_element:
-                product_url = f"https://www.getyourguide.com/{link_element['href']}".split('?ranking_uuid')[0]
-                self.logger.logger_info.debug(f"Extracted product URL: {product_url}")
-            else:
-                self.logger.logger_err.error("Product URL element not found.")
-
-            # Determine position
+            # Extract Title
             try:
-                position = int(tour_item.get('key', position)) + 1 + (page - 1) * self.activity_per_page
-                self.logger.logger_info.debug(f"Extracted position : {position}")
-            except (ValueError, TypeError):
-                position += 1  # Increment position if 'key' is not available or invalid
-                self.logger.logger_err.error("Invalid or missing 'key' attribute for position calculation.")
+                title_element = tour_item.find('h3', {'class': 'vertical-activity-card__title'})
+                title = safe_get_text(title_element, 'vertical-activity-card__title')
+                product_data[0] = title
+                self.logger.logger_info.debug(f"Extracted title: {title}")
+            except ElementNotFoundError as e:
+                self.logger.logger_err.error(e.message)
 
-            # Extract number of reviews
-            review_element = tour_item.find('div', {'class': 'rating-overall__reviews'}) or \
-                             tour_item.find('div', {'class': 'c-activity-rating__label'})
-            if review_element:
-                amount_reviews = review_element.get_text(strip=True)
-                self.logger.logger_info.debug(f"Extracted number of reviews: {amount_reviews}")
-            else:
-                self.logger.logger_info.debug("No reviews found; set to 'N/A'.")
+            # Extract Price and Discount
+            try:
+                price_element = tour_item.find('div', {'class': 'activity-price'})
+                if not price_element:
+                    raise ElementNotFoundError('activity-price')
 
-            # Extract star ratings
-            stars_element = tour_item.find('span', {'class': 'rating-overall__rating-number rating-overall__rating-number--right'}) or \
-                            tour_item.find('span', {'class': 'c-activity-rating__rating'}) or \
-                            tour_item.find('div', {'class': 'c-activity-rating__rating'})
-            if stars_element:
-                stars = stars_element.get_text(strip=True)
-                self.logger.logger_info.debug(f"Extracted stars: {stars}")
-            else:
-                self.logger.logger_info.debug("No star ratings found; set to 'N/A'.")
+                discount_elements = price_element.find_all('div', {'class': 'activity-price__text'})
 
-            # Extract booking status
-            booked_element = tour_item.find('span', {'class': 'c-marketplace-badge c-marketplace-badge--secondary'})
-            if booked_element:
-                booked = booked_element.get_text(strip=True)
-                self.logger.logger_info.debug(f"Extracted booking status: {booked}")
-            else:
-                self.logger.logger_info.debug("No booking status found; set to 'N/A'.")
+                discount_texts = [el.get_text(strip=True) for el in discount_elements if el.get_text(strip=True)]
+                if len(discount_texts) == 2:
+                    product_data[2] = discount_texts[0]  # price
+                    product_data[5] = discount_texts[1]  # discount
+                elif len(discount_texts) == 1:
+                    product_data[2] = discount_texts[0]  # price
+                    product_data[5] = "N/A"  # discount
+                else:
+                    raise PriceExtractionError("Unexpected number of discount elements.")
 
-            # Extract new activity badge
-            new_activity_element = tour_item.find('span', {'class': 'activity-info__badge c-marketplace-badge c-marketplace-badge--secondary'})
-            if new_activity_element:
-                new_activity = new_activity_element.get_text(strip=True)
-                self.logger.logger_info.debug(f"Extracted new activity badge: {new_activity}")
-            else:
-                self.logger.logger_info.debug("No new activity badge found; set to 'N/A'.")
+                self.logger.logger_info.debug(f"Extracted price: {product_data[2]}")
+                self.logger.logger_info.debug(f"Extracted discount: {product_data[5]}")
+            except (ElementNotFoundError, PriceExtractionError) as e:
+                self.logger.logger_err.error(e.message)
+                # Since price is mandatory, execute fallback and skip further extraction
+                self.logger.logger_info.debug("Executing fallback extraction due to price extraction failure.")
+                fallback_data = self._extract_by_data_test_id(tour_item, page, position, city, category)
+                return fallback_data
 
-            # Compile all extracted data into a list
-            product_data = [
-                title,
-                product_url,
-                price,
-                stars,
-                amount_reviews,
-                discount,
-                tour_item.get_text(strip=True),
-                self.date_today,
-                position,
-                category,
-                booked,
-                'GYG',
-                city
-            ]
+            # Extract Product URL
+            try:
+                link_element = tour_item.find('a', href=True)
+                if not link_element:
+                    raise ElementNotFoundError('product URL link')
+
+                raw_href = link_element['href']
+                # Ensure the href does not contain 'ranking_uuid' query parameter
+                product_url = f"https://www.getyourguide.com/{raw_href}".split('?ranking_uuid')[0]
+                product_data[1] = product_url
+                self.logger.logger_info.debug(f"Extracted product URL: {product_url}")
+            except ElementNotFoundError as e:
+                self.logger.logger_err.error(e.message)
+
+            # Calculate Position
+            try:
+                key_attr = tour_item.get('key')
+                if key_attr is not None:
+                    position = int(key_attr) + 1 + (page - 1) * self.activity_per_page
+                else:
+                    position += 1
+                product_data[8] = position
+                self.logger.logger_info.debug(f"Calculated position: {position}")
+            except (ValueError, TypeError) as e:
+                self.logger.logger_err.error(f"Invalid 'key' attribute for position: {e}")
+                raise PositionCalculationError(str(e))
+
+            # Extract Number of Reviews
+            try:
+                review_element = tour_item.find('div', {'class': 'rating-overall__reviews'}) or \
+                                 tour_item.find('div', {'class': 'c-activity-rating__label'})
+                if review_element:
+                    amount_reviews = safe_get_text(review_element, 'reviews')
+                    product_data[4] = amount_reviews
+                    self.logger.logger_info.debug(f"Number of reviews: {amount_reviews}")
+                else:
+                    self.logger.logger_info.debug("No reviews found; set to 'N/A'.")
+            except ElementNotFoundError as e:
+                self.logger.logger_err.error(e.message)
+
+            # Extract Star Ratings
+            try:
+                stars_element = tour_item.find('span', {'class': 'rating-overall__rating-number rating-overall__rating-number--right'}) or \
+                                tour_item.find('span', {'class': 'c-activity-rating__rating'}) or \
+                                tour_item.find('div', {'class': 'c-activity-rating__rating'})
+                if stars_element:
+                    stars = safe_get_text(stars_element, 'stars')
+                    product_data[3] = stars
+                    self.logger.logger_info.debug(f"Extracted stars: {stars}")
+                else:
+                    self.logger.logger_info.debug("No star ratings found; set to 'N/A'.")
+            except ElementNotFoundError as e:
+                self.logger.logger_err.error(e.message)
+
+            # Extract Booking Status
+            try:
+                booked_element = tour_item.find('span', {'class': 'c-marketplace-badge c-marketplace-badge--secondary'})
+                if booked_element:
+                    booked = safe_get_text(booked_element, 'booking status')
+                    product_data[10] = booked
+                    self.logger.logger_info.debug(f"Extracted booking status: {booked}")
+                else:
+                    self.logger.logger_info.debug("No booking status found; set to 'N/A'.")
+            except ElementNotFoundError as e:
+                self.logger.logger_err.error(e.message)
+
+            # Extract New Activity Badge
+            try:
+                new_activity_element = tour_item.find('span', {'class': 'activity-info__badge c-marketplace-badge c-marketplace-badge--secondary'})
+                if new_activity_element:
+                    new_activity = safe_get_text(new_activity_element, 'new activity badge')
+                    product_data[11] = new_activity
+                    self.logger.logger_info.debug(f"Extracted new activity badge: {new_activity}")
+                else:
+                    self.logger.logger_info.debug("No new activity badge found; set to 'N/A'.")
+            except ElementNotFoundError as e:
+                self.logger.logger_err.error(e.message)
+
+            # Extract Raw Text (if needed)
+            try:
+                raw_text = tour_item.get_text(strip=True)
+                product_data[6] = raw_text
+            except Exception as e:
+                self.logger.logger_err.error(f"Failed to extract raw text: {e}")
 
             return product_data
 
-        except Exception as e:
+        except (DataExtractionError, Exception) as e:
             self.logger.logger_err.error(f"Error extracting data from tour item: {e}")
-            raise
+            # Attempt fallback extraction method
+            try:
+                fallback_data = self._extract_by_data_test_id(tour_item, page, position, city, category)
+                self.logger.logger_info.debug("Fallback extraction method used successfully.")
+                return fallback_data
+            except Exception as fallback_e:
+                self.logger.logger_err.error(f"Fallback extraction also failed: {fallback_e}")
+                # Decide whether to raise the exception or return partial data
+                raise DataExtractionError(f"Both primary and fallback extraction methods failed: {fallback_e}") from e
+            
+
+    def _extract_by_data_test_id(self, tour_item: BeautifulSoup, page: int, position: int, city: str, category: str) -> List[str]:
+        """
+        Extracts relevant product data from a single tour item.
+
+        Args:
+            tour_item (BeautifulSoup): Parsed HTML of a single tour item.
+            page (int): Current page number.
+            position (int): Position of the product on the page.
+            city (str): City associated with the product.
+            category (str): Category of the product.
+
+        Returns:
+            list: A list of extracted product data fields.
+        """
+        product_data = [
+            'N/A',  # title
+            'N/A',  # product_url
+            'N/A',  # price
+            'N/A',  # stars
+            'N/A',  # amount_reviews
+            'N/A',  # discount
+            'N/A',  # raw_text
+            self.date_today,
+            position,
+            category,
+            'N/A',  # booked
+            'GYG',
+            city
+        ]
+
+        try:
+            # Extract Product URL
+            try:
+                link_element = tour_item.find('a', attrs={'data-test-id': 'vertical-activity-card-link'}, href=True)
+                product_url = f"https://www.getyourguide.com{link_element['href'].split('?ranking_uuid')[0]}"
+                product_data[1] = product_url
+                self.logger.logger_info.debug(f"Extracted product URL: {product_url}")
+            except AttributeError:
+                self.logger.logger_err.error("Product URL element not found.")
+                raise ElementNotFoundError('vertical-activity-card-link')
+
+            # Extract Title
+            try:
+                title_element = tour_item.find(attrs={'data-test-id': 'activity-card-title'})
+                title = safe_get_text(title_element, 'activity-card-title')
+                product_data[0] = title
+                self.logger.logger_info.debug(f"Extracted title: {title}")
+            except ElementNotFoundError as e:
+                self.logger.logger_err.error(e.message)
+
+            # Calculate Position
+            try:
+                key_attr = tour_item.get('key')
+                if key_attr is not None:
+                    position = int(key_attr) + 1 + (page - 1) * self.activity_per_page
+                else:
+                    position += 1
+                product_data[8] = position
+                self.logger.logger_info.debug(f"Calculated position: {position}")
+            except (ValueError, TypeError) as e:
+                self.logger.logger_err.error(f"Invalid 'key' attribute for position: {e}")
+                raise PositionCalculationError(str(e))
+
+            # Extract Price and Discount
+            try:
+                price_element = tour_item.find('div', {'class': 'prominent-price-block'})
+                if not price_element:
+                    raise ElementNotFoundError('prominent-price-block')
+
+                # Original Price
+                original_price_element = price_element.find('div', {'class': 'previous-price'})
+                original_price_text = safe_get_text(original_price_element, 'previous-price') if original_price_element else 'N/A'
+                self.logger.logger_info.debug(f"Original price: {original_price_text}")
+
+                # Discounted Price
+                discounted_price_element = price_element.find('span', {'class': 'prominent-price-block--deal'})
+                if discounted_price_element:
+                    discounted_price_big = price_element.find('span', {'class': 'prominent-price--big'})
+                    if discounted_price_big:
+                        currency = discounted_price_big.find('span', {'class': 'prominent-price--small--prefix'})
+                        main_price = discounted_price_big.find(text=True, recursive=False)
+                        suffix = discounted_price_big.find('span', {'class': 'prominent-price--small--suffix'})
+                        if currency and main_price and suffix:
+                            discounted_price = f"{currency.get_text(strip=True)}{main_price.strip()}.{suffix.get_text(strip=True)}"
+                            product_data[5] = discounted_price
+                            product_data[2] = original_price_text
+                            self.logger.logger_info.debug(f"Discounted price: {discounted_price}")
+                        else:
+                            raise PriceExtractionError("Currency, main price, or suffix missing in discounted price.")
+                    else:
+                        raise PriceExtractionError("Prominent price big element missing for discounted price.")
+                else:
+                    # Standard Price
+                    prominent_price = price_element.find('span', {'class': 'prominent-price--big'})
+                    if prominent_price:
+                        currency = prominent_price.find('span', {'class': 'prominent-price--small--prefix'})
+                        main_price = prominent_price.find(text=True, recursive=False)
+                        suffix = prominent_price.find('span', {'class': 'prominent-price--small--suffix'})
+                        if currency and main_price and suffix:
+                            standard_price = f"{currency.get_text(strip=True)}{main_price.strip()}.{suffix.get_text(strip=True)}"
+                            product_data[2] = standard_price
+                            self.logger.logger_info.debug(f"Standard price: {standard_price}")
+                        else:
+                            raise PriceExtractionError("Currency, main price, or suffix missing in standard price.")
+                    else:
+                        raise ElementNotFoundError('prominent-price--big')
+            except (ElementNotFoundError, PriceExtractionError) as e:
+                self.logger.logger_err.error(e.message)
+
+            # Extract Number of Reviews
+            try:
+                review_element = tour_item.find(attrs={'data-test-id': 'activity-card-reviews'}) or \
+                                tour_item.find('div', {'class': 'c-activity-rating__label'})
+                if review_element:
+                    amount_reviews = safe_get_text(review_element, 'activity-card-reviews')
+                    product_data[4] = amount_reviews
+                    self.logger.logger_info.debug(f"Number of reviews: {amount_reviews}")
+                else:
+                    self.logger.logger_info.debug("No reviews found; set to 'N/A'.")
+            except ElementNotFoundError as e:
+                self.logger.logger_err.error(e.message)
+
+            # Extract Star Ratings
+            try:
+                stars_element = tour_item.find(attrs={'data-test-id': 'activity-card-stars'}) or \
+                                tour_item.find('div', {'class': 'c-activity-rating__rating'})
+                if stars_element:
+                    stars = safe_get_text(stars_element, 'activity-card-stars')
+                    product_data[3] = stars
+                    self.logger.logger_info.debug(f"Star ratings: {stars}")
+                else:
+                    self.logger.logger_info.debug("No star ratings found; set to 'N/A'.")
+            except ElementNotFoundError as e:
+                self.logger.logger_err.error(e.message)
+
+            # Extract Booking Status
+            try:
+                booked_element = tour_item.find(attrs={'data-test-id': 'activity-card-booked-status'}) or \
+                                tour_item.find('span', {'class': 'c-marketplace-badge c-marketplace-badge--secondary'})
+                if booked_element:
+                    booked = safe_get_text(booked_element, 'activity-card-booked-status')
+                    product_data[10] = booked
+                    self.logger.logger_info.debug(f"Booking status: {booked}")
+                else:
+                    self.logger.logger_info.debug("No booking status found; set to 'N/A'.")
+            except ElementNotFoundError as e:
+                self.logger.logger_err.error(e.message)
+
+            # Extract New Activity Badge
+            try:
+                new_activity_element = tour_item.find(attrs={'data-test-id': 'activity-card-badge-new-activity'}) or \
+                                    tour_item.find('span', {'class': 'activity-info__badge c-marketplace-badge c-marketplace-badge--secondary'})
+                if new_activity_element:
+                    new_activity = safe_get_text(new_activity_element, 'activity-card-badge-new-activity')
+                    product_data[11] = new_activity
+                    self.logger.logger_info.debug(f"New activity badge: {new_activity}")
+                else:
+                    self.logger.logger_info.debug("No new activity badge found; set to 'N/A'.")
+            except ElementNotFoundError as e:
+                self.logger.logger_err.error(e.message)
+
+            # Extract Raw Text (if needed)
+            try:
+                raw_text = tour_item.get_text(strip=True)
+                product_data[6] = raw_text
+            except Exception as e:
+                self.logger.logger_err.error(f"Failed to extract raw text: {e}")
+
+            return product_data
+
+        except (DataExtractionError, Exception) as e:
+            self.logger.logger_err.error(f"Error extracting data from tour item: {e}")
+            raise  # Re-raise the exception after logging
