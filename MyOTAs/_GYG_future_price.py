@@ -142,19 +142,29 @@ def extract_options(driver, option_details, activity_title, language, adults_amo
             option_time_range = option.find_element(By.CLASS_NAME, 'c-chip-group').text if option.find_elements(By.CLASS_NAME, 'c-chip-group') else 'Not listed'
             try:
                 try:
-                    option_price_total = option.find_element(By.CLASS_NAME, 'activity-option__price-group-total').text
-                    option_price_per_person = float(option_price_total.replace('€', '').replace(',', '').strip()) / float(adults_amount)
+                    price_element = option.find_element(By.CSS_SELECTOR,'.prominent-price--big')
+                    price_main = price_element.text
+                    price_suffix = price_element.find_element(By.CSS_SELECTOR,'.prominent-price--small.prominent-price--small--suffix').text
+                    if price_main[-2:] == price_suffix:
+                        # Insert a comma before the last two digits in price_main
+                        option_price_total = f"{price_main[:-2]}.{price_main[-2:]}"
+                    else:
+                        option_price_total = price_main  # No formatting applied
                 except:
                     try:
-                        option_price_total = option.find_element(By.CLASS_NAME, 'activity-option__cart-message-text--future-availability').text
+                        option_price_total = option.find_element(By.CSS_SELECTOR,'[class*="activity-option-price-wrapper__price"]').text
                     except:
-                        option_price_total = option.find_element(By.CLASS_NAME, 'activity-option-cart-message-wrapper').text
-                    option_price_per_person = 'Not Available'
+                        try:
+                            option_price_total = option.find_element(By.CLASS_NAME, 'activity-option__cart-message-text--future-availability').text
+                        except:
+                            option_price_total = option.find_element(By.CLASS_NAME, 'activity-option__price-group-total').text
             except Exception as e:
                 logger.logger_err.info(f"Error parsing price: {e}")
-                option_price_total = 'Not Available'
+                raise e
+            if 'next' not in option_price_total.lower():
+                option_price_per_person = float(option_price_total.replace('€', '').replace(',', '').strip()) / float(adults_amount)
+            else:
                 option_price_per_person = 'Not Available'
-
             spots_left = option.find_element(By.CSS_SELECTOR, "span[data-test-id*='activity-option-is-x-spots-left']").text if option.find_elements(By.CSS_SELECTOR, "span[data-test-id*='activity-option-is-x-spots-left']") else 'N/A'
 
             list_of_items.append({
@@ -264,7 +274,7 @@ def get_future_price(driver, url, viewer, city, language, adults_amount, max_day
                 full_url = full_url.replace(start_collection_date, max_date_done.strftime('%Y-%m-%d'))
                 driver.get(full_url)
                 check_and_click_only_essential(driver, url)
-
+ 
 
         change_currency(driver, url)
 
