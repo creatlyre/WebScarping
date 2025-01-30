@@ -17,7 +17,7 @@ import os
 from openpyxl import load_workbook
 import time
 import glob
-from OTAs.logger.logger_manager_future_price import LoggerManagerFuturePrice
+from OTAs.logger.logger_manager import LoggerManager
 from OTAs.file_management.file_path_manager_future_price import FilePathManagerFuturePrice
 from OTAs.file_management.config_manager_future_price import ConfigReader
 from OTAs.uploaders.azure_blob_uploader import AzureBlobUploader
@@ -58,7 +58,7 @@ class ViatorScraper:
         self.html_output_dir = "html_snapshots"
         os.makedirs(self.html_output_dir, exist_ok=True)
         # Logger setup
-        self.logger = LoggerManagerFuturePrice(file_manager, application="viator_future_price")
+        self.logger = LoggerManager(file_manager, application="future_price")
         # Load existing data if file exists
         self.load_existing_data()
 
@@ -847,7 +847,7 @@ def main():
                 #             print(f"Running additional collection for URL: {url}, Adults: {adults}, Language: {language}, Frequency: {schedule['frequency_type']}, Run number: {time+1}")
     ####
 
-    azure_storage_upload = AzureBlobUploader(file_manager, LoggerManagerFuturePrice(file_manager,'future_price'))
+    azure_storage_upload = AzureBlobUploader(file_manager, LoggerManager(file_manager,'future_price'))
     print(f'Files to process: {all_excel_file_list}')
     for files_to_upload in all_excel_file_list:
         future_price_file_path = files_to_upload[0]

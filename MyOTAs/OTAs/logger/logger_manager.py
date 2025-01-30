@@ -5,20 +5,23 @@ import datetime
 class LoggerManager:
     def __init__(self, file_manager, application = "daily"):
         self.logs_path = file_manager.logs_path
+        self.site = file_manager.site.lower()
         self.ensure_log_folder_exists()  # Ensure log folder exists
 
          # Dynamically create paths for each log type based on current year/month
         current_log_path = self.get_current_log_path()
         
         # Define log files for each logger
-        self.error_log_file = os.path.join(current_log_path, f'{application}_error_logs.log')
-        self.info_log_file = os.path.join(current_log_path, f'{application}_info_logs.log')
-        self.done_log_file = os.path.join(current_log_path, f'{application}_done_logs.log')
+        self.error_log_file = os.path.join(current_log_path, f'{self.site}_{application}_error_logs.log')
+        self.info_log_file = os.path.join(current_log_path, f'{self.site}_{application}_info_logs.log')
+        self.done_log_file = os.path.join(current_log_path, f'{self.site}_{application}_done_logs.log')
+        self.statistic_log = os.path.join(current_log_path, f'{self.site}_{application}_statistics_logs.log')
 
         # Set up loggers
         self.logger_err = self.get_or_create_logger('Error_logger', self.error_log_file, level=logging.DEBUG)
         self.logger_info = self.get_or_create_logger('Info_logger', self.info_log_file, level=logging.DEBUG)
         self.logger_done = self.get_or_create_logger('Done_logger', self.done_log_file, level=logging.INFO)
+        self.logger_statistics = self.get_or_create_logger('Statistics_logger', self.statistic_log, level=logging.DEBUG)
 
     def get_or_create_logger(self, logger_name, log_file, level=logging.INFO):
         """Creates or retrieves a logger, ensuring no duplicate handlers."""
