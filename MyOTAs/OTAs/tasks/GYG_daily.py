@@ -47,7 +47,7 @@ def main():
     and orchestrates the scraping and uploading processes.
     """
     DEBUG = DetermineDebugRun()
-    
+    DEBUG.debug = False
     activity_per_page = 16
     try:
         # Initialize site and file manager

@@ -398,6 +398,8 @@ class ScraperGYG(ScraperBase):
                 discount_elements = price_element.find_all('div', {'class': 'activity-price__text'})
 
                 discount_texts = [el.get_text(strip=True) for el in discount_elements if el.get_text(strip=True)]
+                self.logger.logger_info.debug(f"Extracted discount elements: {discount_texts}")
+
                 if len(discount_texts) == 2:
                     product_data[2] = discount_texts[0]  # price
                     product_data[5] = discount_texts[1]  # discount
@@ -412,7 +414,7 @@ class ScraperGYG(ScraperBase):
             except (ElementNotFoundError, PriceExtractionError) as e:
                 self.logger.logger_err.error(e.message)
                 # Since price is mandatory, execute fallback and skip further extraction
-                self.logger.logger_info.debug("Executing fallback extraction due to price extraction failure.")
+                self.logger.logger_info.info("Executing fallback extraction due to price extraction failure.")
                 fallback_data = self._extract_by_data_test_id(tour_item, page, position, city, category)
                 return fallback_data
 
@@ -508,7 +510,7 @@ class ScraperGYG(ScraperBase):
             # Attempt fallback extraction method
             try:
                 fallback_data = self._extract_by_data_test_id(tour_item, page, position, city, category)
-                self.logger.logger_info.debug("Fallback extraction method used successfully.")
+                self.logger.logger_info.info("Fallback extraction method used successfully.")
                 return fallback_data
             except Exception as fallback_e:
                 self.logger.logger_err.error(f"Fallback extraction also failed: {fallback_e}")
@@ -593,7 +595,7 @@ class ScraperGYG(ScraperBase):
                 # Discounted Price
                 discounted_price_element = price_element.find('span', {'class': 'prominent-price-block--deal'})
                 if discounted_price_element:
-                    discounted_price_big = price_element.find('span', {'class': 'prominent-price--big'})
+                    discounted_price_big = price_element.find('span', {'class': 'prominent-price'})
                     if discounted_price_big:
                         currency = discounted_price_big.find('span', {'class': 'prominent-price--small--prefix'})
                         main_price = discounted_price_big.find(text=True, recursive=False)
@@ -603,19 +605,28 @@ class ScraperGYG(ScraperBase):
                             product_data[5] = discounted_price
                             product_data[2] = original_price_text
                             self.logger.logger_info.debug(f"Discounted price: {discounted_price}")
+                        elif main_price:
+                            discounted_price = main_price.strip()
+                            product_data[5] = discounted_price
+                            product_data[2] = original_price_text
+                            self.logger.logger_info.debug(f"Discounted price: {discounted_price}")
                         else:
                             raise PriceExtractionError("Currency, main price, or suffix missing in discounted price.")
                     else:
                         raise PriceExtractionError("Prominent price big element missing for discounted price.")
                 else:
                     # Standard Price
-                    prominent_price = price_element.find('span', {'class': 'prominent-price--big'})
+                    prominent_price = price_element.find('span', {'class': 'prominent-price'})
                     if prominent_price:
                         currency = prominent_price.find('span', {'class': 'prominent-price--small--prefix'})
                         main_price = prominent_price.find(text=True, recursive=False)
                         suffix = prominent_price.find('span', {'class': 'prominent-price--small--suffix'})
                         if currency and main_price and suffix:
                             standard_price = f"{currency.get_text(strip=True)}{main_price.strip()}.{suffix.get_text(strip=True)}"
+                            product_data[2] = standard_price
+                            self.logger.logger_info.debug(f"Standard price: {standard_price}")
+                        elif main_price:
+                            standard_price = main_price.strip()
                             product_data[2] = standard_price
                             self.logger.logger_info.debug(f"Standard price: {standard_price}")
                         else:
