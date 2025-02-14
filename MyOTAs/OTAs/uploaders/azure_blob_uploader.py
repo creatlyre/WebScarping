@@ -120,6 +120,7 @@ class AzureBlobUploader:
             self.logger.logger_done.info("File uploaded successfully to Azure Blob Storage (refined).")
 
         except Exception as e:
+            print(sheet_name)
             self.logger.logger_err.error(f"An error occurred while transforming and uploading to refined storage: {e}")
             
         finally:

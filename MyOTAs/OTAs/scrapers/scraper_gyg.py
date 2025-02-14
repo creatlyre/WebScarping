@@ -213,6 +213,7 @@ class ScraperGYG(ScraperBase):
                     for tour_item in tour_items:
                         try:
                             product_data = self._extract_product_data(tour_item, page, position, row['City'], row['RawCategory'])
+                            self.logger.logger_info.debug(f"Extracted product data: {product_data}")
                             data.append(product_data)
                             position += 1
                         except Exception as e:

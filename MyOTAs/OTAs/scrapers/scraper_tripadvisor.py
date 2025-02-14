@@ -314,8 +314,8 @@ class TripadvisorScraper:
                     # For debugging purposes, limit the total products to 30
                     DEBUG = DetermineDebugRun()
                     if DEBUG.debug:
-                        self.logger.logger_info.warning("DEBUG mode is enabled. Limiting total products to 30.")
-                        # self.total_products = 30
+                        self.logger.logger_info.warning("DEBUG mode is enabled. Limiting total products to 120.")
+                        self.total_products = 120
 
                     # 3) Loop in increments of 30. (TripAdvisor often uses “-oa30”, “-oa60” etc.)
                     while self.products_collected < self.total_products:

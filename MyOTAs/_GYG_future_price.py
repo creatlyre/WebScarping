@@ -758,7 +758,53 @@ def check_if_today_done_on_schedule_in_csv(url, city, config):
         logger.logger_err.error(f"An error occurred while checking today's data: {e}")
         return False
 
+def load_latest_not_collected_url_df(directory):
+    """
+    Loads the latest CSV file from the given directory.
 
+    :param directory: Path to the directory containing CSV files.
+    :return: DataFrame containing the latest data, or None if no file is found.
+    """
+    try:
+        # Get list of all files in the directory
+        files = [f for f in os.listdir(directory) if f.endswith(".csv")]
+
+        if not files:
+            print("No valid CSV files found in the directory.")
+            return None, None
+
+        # Sort files based on timestamp in filename
+        files.sort(reverse=True, key=lambda x: datetime.datetime.strptime(x.split('_')[-1].replace('.csv', ''), "%Y-%m-%d"))
+
+        latest_file = files[0]
+        latest_file_path = os.path.join(directory, latest_file)
+
+        print(f"Loading latest file: {latest_file_path}")
+
+        # Load into DataFrame
+        df = pd.read_csv(latest_file_path)
+
+        return df, latest_file_path
+
+    except Exception as e:
+        print(f"Error loading the latest CSV file: {e}")
+        return None, None
+
+def save_dataframe_with_status(df, url, latest_file_path):
+    """
+    Save the DataFrame with an additional 'Status' column to the specified directory.
+    """
+    try:
+
+        # Add 'Status' column
+        df.loc[df['Product URL'] == url, 'Status'] = 'Done'
+
+        # Save the DataFrame to CSV
+        df.to_csv(latest_file_path, index=False)
+        logger.logger_done.info(f"DataFrame saved with status to {latest_file_path}")
+    except Exception as e:
+        logger.logger_err.error(f"An error occurred while saving DataFrame with status: {e}")
+        raise
 def main():
     """
     Main execution function.
@@ -766,6 +812,12 @@ def main():
     # sample_config = Config("N/A", "N/A")
     # define_logging(sample_config.logs_path)
     global logger
+    directory = fr"G:\.shortcut-targets-by-id\1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2\MyOTAs\Baza Excel\Resource\future_price_not_done"
+
+    # Load the latest DataFrame
+    # latest_df, latest_file_path = load_latest_not_collected_url_df(directory)
+    url_re_run=False
+
     try:
         # Initialize file path manager and config reader
         file_manager = FilePathManagerFuturePrice(SITE, "N/A", "N/A", "N/A")
@@ -787,6 +839,10 @@ def main():
                 frequency, max_days = config_reader.get_highest_order_schedule(schedules)
 
                 if frequency == "No schedule for today":
+                    # if latest_df is not None and url in latest_df['url'].values:
+                    #     logger.logger_done.info(f"URL: {url} is already in the latest DataFrame.")
+                    #     url_re_run = True
+                    # else:
                     logger.logger_done.info(f"URL: {url} is not scheduled for today.")
                     continue
 
@@ -805,6 +861,9 @@ def main():
                     last_run = datetime.datetime.now().strftime('%Y-%m-%d')
                     
                     config_reader.update_next_last_run(SITE, url=url, adults=adults, language=language, frequency_type=frequency, next_run=next_run, last_run=last_run)
+            if url_re_run:
+                pass
+                # save_dataframe_with_status(latest_df, url, latest_file_path)
 
         quit_driver(driver)
         for adults, language in combinations:
