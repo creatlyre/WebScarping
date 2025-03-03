@@ -46,8 +46,8 @@ def main():
     This function initializes the necessary managers, loads the links from the link file,
     and orchestrates the scraping and uploading processes.
     """
-    DEBUG = DetermineDebugRun()
-    DEBUG.debug = False
+    DEBUG = DetermineDebugRun(check_for_debug=False)
+    
     activity_per_page = 16
     try:
         # Initialize site and file manager

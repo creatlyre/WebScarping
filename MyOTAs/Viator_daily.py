@@ -34,7 +34,7 @@ import csv
 # %%
 # File paths
 date_today = datetime.date.today().strftime("%Y-%m-%d")
-# date_today = '2024-07-02'
+# date_today = '2025-03-01'
 output_viator = r'G:/.shortcut-targets-by-id/1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2/MyOTAs/Baza Excel/Viator/Daily'
 archive_folder = fr'{output_viator}/Archive'
 file_path_done =fr'{output_viator}/{date_today}-DONE-Viator.csv'  
@@ -452,7 +452,7 @@ def transform_upload_to_refined(local_file_path, storage_account_name, storage_a
                 sheet_name = 'Mount-Vesuvius'
                 df['Miasto'] = 'Mount-Vesuvius'
             # Make changes to the df DataFrame as needed
-            
+            print(sheet_name)
             df['Data zestawienia'] = df['Data zestawienia'].astype('str')
             df['IloscOpini'] = df['IloscOpini'].fillna(0) 
             df['Opinia'] = df['Opinia'].fillna('N/A')
@@ -468,6 +468,26 @@ def transform_upload_to_refined(local_file_path, storage_account_name, storage_a
             df['Data zestawienia'] = pd.to_datetime(df['Data zestawienia'], errors='coerce')
 
             df = df.dropna(subset=['Data zestawienia'])
+
+             # Check for missing values in "Cena"
+            missing_cena_count = df['Cena'].isna().sum()
+            total_records = len(df)
+
+            if missing_cena_count / total_records > 0.1:
+                raise ValueError(f"Error: More than 10% ({missing_cena_count}/{total_records}) of 'Cena' values are missing. Data processing stopped.")
+            
+            missing_cena_positions = df[df['Cena'].isna()]['Pozycja'].tolist()
+            
+            if any(pos <= 20 for pos in missing_cena_positions):
+                raise ValueError("Error: 'Cena' is missing in the first 20 products. Data processing stopped.")
+
+
+            removed_rows = df[df['Cena'].isna()]
+            df = df.dropna(subset=['Cena'])
+            
+            if not removed_rows.empty:
+                logging.info(f"Removed {len(removed_rows)} rows due to missing 'Cena':\n{removed_rows[['Pozycja', 'Cena']]}")
+
             for index, row in df.iterrows():
                 currency = ''
                 if 'per group' in row['Cena']:
