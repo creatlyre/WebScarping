@@ -34,6 +34,7 @@ import csv
 # %%
 # File paths
 date_today = datetime.date.today().strftime("%Y-%m-%d")
+DEBUG = False
 # date_today = '2025-03-01'
 output_viator = r'G:/.shortcut-targets-by-id/1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2/MyOTAs/Baza Excel/Viator/Daily'
 archive_folder = fr'{output_viator}/Archive'
@@ -564,39 +565,78 @@ def transform_upload_to_refined(local_file_path, storage_account_name, storage_a
 
 # %%
 def extract_data_html_data_automation(tour_item):
-    title = tour_item.select_one("[data-automation*=ttd-product-list-card-title]").get_text()
-    price_container = tour_item.select_one("[data-automation*=ttd-product-list-card-price]")
-    price_with_disc = price_container.select_one("[class*=currentPriceContainer]")
-    price = price_with_disc.select_one("[class*=currentPrice]").text.strip().split('from')[-1]
     try:
-        part_url = tour_item.select_one("[data-automation*=ttd-product-list-card-link]").get('href').split('"')[1].split('\\')[0]
-    except:
+        title = tour_item.select_one("[data-automation*=ttd-product-list-card-title]").get_text()
+        price_container = tour_item.select_one("[data-automation*=ttd-product-list-card-price]")
+        price = price_container.select_one("[class*=currentPrice]").text.strip()
         try:
-            part_url = tour_item['href'].split('"')[1].split('\\')[0]
+            part_url = tour_item.select_one("[data-automation=ttd-product-list-card-link]").get('href')
         except:
-            logger_err.error(f"No able to find the HREF for {title}, moving further")
-            part_url = ""
-            
-    product_url = f"https://www.viator.com{part_url}"
-    siteuse = 'Viator'
-    try:
-        discount = price_container.select_one("[class*=discountInfoContainer]").select_one("[class*=originalPrice]").text.strip()
-    except:
-        discount = 'N/A'
+            try:
+                part_url = tour_item['href'].split('"')[1].split('\\')[0]
+            except:
+                logger_err.error(f"No able to find the HREF for {title}, moving further")
+                part_url = ""
+                
+        product_url = f"https://www.viator.com{part_url}"
+        siteuse = 'Viator'
+        try:
+            discount = price_container.select_one("[class*=discountPriceContainer]").select_one("[class*=originalPrice]").text.strip()
+        except:
+            discount = 'N/A'
 
-    amount_reviews = 'N/A'
-    #NUMBER OF REVIEWS
-    try:
-        amount_reviews = tour_item.select_one("[class*=reviewCount]").text.strip()
-    except:
-        pass
+        amount_reviews = 'N/A'
+        #NUMBER OF REVIEWS
+        try:
+            amount_reviews = tour_item.select_one("[class*=reviewCount]").text.strip()
+        except:
+            pass
 
+        try:
+            start_amount = tour_item.select_one("[class*=rating__JCMy]").text.strip()
+            stars = f'star-{str(start_amount)}'
+        except:
+            try:
+                star_int = 0
+                stars_grouped = tour_item.select_one("[class*=stars]").find_all('svg')
+                half_star = 'M14'
+                for st in stars_grouped:
+                    path_text = str(st.find('path')['d'])
+                    if half_star in path_text:
+                        star_int = star_int + 0.5
+                    else:
+                        if '0a.77.77' in str(st):
+                            star_int = star_int + 1
+                stars = f'star-{str(star_int)}'
+            except:
+                stars = 'N/A'
 
+        text = tour_item.text.strip()
+        return title, product_url, price, stars, amount_reviews, discount, text, siteuse
+    except Exception as e:
+        logger_err.error(f"Error processing tour item: {str(e)}")
+        return None, None, None, None, None, None, None, None
+    
+def extract_data_html_debug_version(tour_item):
     try:
-        start_amount = tour_item.select_one("[class*=rating__JCMy]").text.strip()
-        
-        stars = f'star-{str(start_amount)}'
-    except:
+        title = tour_item.select_one("[class*=title]").text.strip()
+        price = tour_item.select_one("[class*=currentPrice]").text.strip()
+        if 'from' in price:
+            price = price.split('from')[1]
+        splitter = price[0]
+        product_url = f"https://www.viator.com{tour_item.find('a')['href']}"
+        siteuse = 'Viator'
+        star ="M7.5 0a.77.77 0 00-.701.456L5.087 4.083a.785.785 0 01-.588.448l-3.827.582a.828.828 0 00-.433 1.395L3.008 9.33c.185.192.26"
+        half ="M14.761 6.507a.828.828 0 00-.433-1.395L10.5 4.53a.785.785 0 01-.589-.447L8.201.456a.767.767 0 00-1.402 0L5.087 4.083a.785"
+        nostar ="M7.5 1.167l1.565 3.317c.242.52.728.885 1.295.974l3.583.544-2.62 2.673a1.782 1.782 0 00-.48 1.532l.609 3.718L8.315 12.2a1.6"
+        try:
+            discount = tour_item.select_one("[class*=savingsLabel]").text.strip()
+        except:
+            discount = 'N/A'
+        try:
+            amount_reviews = tour_item.select_one("[class*=reviewCount]").text.strip()
+        except:
+            amount_reviews = 'N/A'
         try:
             star_int = 0
             stars_grouped = tour_item.select_one("[class*=stars]").find_all('svg')
@@ -611,102 +651,105 @@ def extract_data_html_data_automation(tour_item):
             stars = f'star-{str(star_int)}'
         except:
             stars = 'N/A'
+        text = tour_item.text.strip()
 
-    text = tour_item.text.strip()
-    return title, product_url, price, stars, amount_reviews, discount, text, siteuse\
-    
-def extract_data_html_debug_version(tour_item):
-    title = tour_item.select_one("[class*=title]").text.strip()
-    price = tour_item.select_one("[class*=currentPrice]").text.strip()
-    if 'from' in price:
-        price = price.split('from')[1]
-    splitter = price[0]
-    product_url = f"https://www.viator.com{tour_item.find('a')['href']}"
-    siteuse = 'Viator'
-    star ="M7.5 0a.77.77 0 00-.701.456L5.087 4.083a.785.785 0 01-.588.448l-3.827.582a.828.828 0 00-.433 1.395L3.008 9.33c.185.192.26"
-    half ="M14.761 6.507a.828.828 0 00-.433-1.395L10.5 4.53a.785.785 0 01-.589-.447L8.201.456a.767.767 0 00-1.402 0L5.087 4.083a.785"
-    nostar ="M7.5 1.167l1.565 3.317c.242.52.728.885 1.295.974l3.583.544-2.62 2.673a1.782 1.782 0 00-.48 1.532l.609 3.718L8.315 12.2a1.6"
-    try:
-        discount = tour_item.select_one("[class*=savingsLabel]").text.strip()
-    except:
-        discount = 'N/A'
-    try:
-        amount_reviews = tour_item.select_one("[class*=reviewCount]").text.strip()
-    except:
-        amount_reviews = 'N/A'
-    try:
-        star_int = 0
-        stars_grouped = tour_item.select_one("[class*=stars]").find_all('svg')
-        half_star = 'M14'
-        for st in stars_grouped:
-            path_text = str(st.find('path')['d'])
-            if half_star in path_text:
-                star_int = star_int + 0.5
-            else:
-                if '0a.77.77' in str(st):
-                    star_int = star_int + 1
-        stars = f'star-{str(star_int)}'
-    except:
-        stars = 'N/A'
-    text = tour_item.text.strip()
-
-    return title, product_url, price, stars, amount_reviews, discount, text, siteuse 
+        return title, product_url, price, stars, amount_reviews, discount, text, siteuse
+    except Exception as e:
+        logger_err.error(f"Error processing tour item: {str(e)}")
+        return None, None, None, None, None, None, None, None
 
 # %%
-def process_html_from_response_zenrows(response, city, category, position = 0, DEBUG=False):    
+def process_html_from_response_zenrows(response, city, category, position=0, DEBUG=False):
     data = []
-    soup = BeautifulSoup(response.content, 'html.parser')       
-    tours = soup.select("[data-automation*=ttd-product-list-card]")
-    if DEBUG:
-        print(response)
-    # Filter these elements to find those that exactly match your target attribute value
-    tour_items = [el for el in tours if el.get('data-automation') == r'\"ttd-product-list-card\"']
+    try:
+        response_json = response.json()
+        html_content = response_json.get("html", "")
+        soup = BeautifulSoup(html_content, "html.parser")
+        if DEBUG:
+            print("Successfully parsed HTML content.")
+    except Exception as e:
+        logger_err.error(f"Error parsing HTML response for city {city}, category {category}: {str(e)}", exc_info=True)
+        return None
 
-    #Check if promoted element exisit
+    try:
+        tour_items = soup.select("[data-automation=ttd-product-list-card]")
+        if DEBUG:
+            print(f"Found {len(tour_items)} tour card elements.")
+    except Exception as e:
+        logger_err.error(f"Error selecting tour cards for city {city}, category {category}: {str(e)}", exc_info=True)
+        tour_items = []
+        
+    if len(tour_items) == 0:
+        logger_err.error(f"No tour items found for city {city}, category {category}")
+        raise ValueError("No tour items found.")
     try:
         tour_promoted = soup.select("[class*=productListCardWithDebug__pr66]")
-    except:
+        if DEBUG:
+            print(f"Found {len(tour_promoted)} promoted tour items.")
+    except Exception as e:
         tour_promoted = None
-        print("Promoted section not found")
+        logger_err.error(f"Error selecting promoted tour for city {city}, category {category}: {str(e)}", exc_info=True)
 
-    if tour_promoted:
-        position = position + 1
-        logger_info(f"For city {city} found promoted product")
-        title, product_url, price, stars, amount_reviews, discount, text, siteuse = extract_data_html_debug_version(tour_promoted)
-        data.append([title,product_url, price, stars, amount_reviews, discount, text, date_today, position, category, siteuse, city ])
-        
+    if tour_promoted and len(tour_promoted) > 0:
+        position += 1
+        logger_info.info(f"For city {city} found promoted product")
+        try:
+            # Assuming extract_data_html_debug_version accepts a single element, not a list.
+            title, product_url, price, stars, amount_reviews, discount, text, siteuse = extract_data_html_debug_version(tour_promoted[0])
+            data.append([title, product_url, price, stars, amount_reviews, discount, text,
+                         date_today, position, category, siteuse, city])
+        except Exception as e:
+            logger_err.error(f"Error processing promoted tour for city {city}: {str(e)}", exc_info=True)
     else:
-        print("Promoted section not available")
+        logger_info.info(f"Promoted section not available for city {city}")
 
-    print(f"Found {len(tour_items)} elements with exact 'data-automation=ttd-product-list-card' match.")
-    if len(tour_items) > 0:
+    logger_info.info(f"Found {len(tour_items)} elements with exact 'data-automation=ttd-product-list-card' match for city {city}")
+
+    if tour_items:
         for tour_item in tour_items:
-            position = position + 1
+            position += 1
             if DEBUG:
-                print(tour_item)
-            
-            title, product_url, price, stars, amount_reviews, discount, text, siteuse = extract_data_html_data_automation(tour_item)
-
-            data.append([title,product_url, price, stars, amount_reviews, discount, text, date_today, position, category, siteuse, city ])
+                print("Processing tour item:", tour_item)
+            try:
+                title, product_url, price, stars, amount_reviews, discount, text, siteuse = extract_data_html_data_automation(tour_item)
+                data.append([title, product_url, price, stars, amount_reviews, discount, text,
+                             date_today, position, category, siteuse, city])
+            except Exception as e:
+                logger_err.error(f"Error processing tour item for city {city}: {str(e)}", exc_info=True)
     else:
-        tour_items = soup.select("[class*=productListCardWithDebug]")
-#             print('Running using debug HTML')
+        try:
+            tour_items = soup.select("[class*=productListCardWithDebug]")
+            if DEBUG:
+                print(f"Fallback: Found {len(tour_items)} debug tour items.")
+        except Exception as e:
+            logger_err.error(f"Error selecting debug tour items for city {city}: {str(e)}", exc_info=True)
+            tour_items = []
         for tour_item in tour_items:
-            position = position + 1
-            
-            title, product_url, price, stars, amount_reviews, discount, text, siteuse = extract_data_html_debug_version(tour_item)
-            data.append([title,product_url, price, stars, amount_reviews, discount, text, date_today, position, category, siteuse, city ])
-    # print(f'URL: {city} currency: {splitter}')
-    url_done = time.time()
-    # message = f'Time for {city}-{category}: {round((url_done - url_time)/60, 3)}min | Pages: {max_pages} | AVG {round((url_done - url_time)/max_pages, 2)}s per page Currency: 1-{first_style_curr}, 2-{second_style_curr}, 3-{thirtd_style_curr}'
-    # print(message)
-    # logger_info.info(message)
-    df = pd.DataFrame(data, columns=['Tytul', 'Tytul URL', 'Cena', 'Opinia', 'IloscOpini', 'Przecena', 'Tekst', 'Data zestawienia', 'Pozycja', 'Kategoria', 'SiteUse', 'Miasto'])
+            position += 1
+            try:
+                title, product_url, price, stars, amount_reviews, discount, text, siteuse = extract_data_html_debug_version(tour_item)
+                data.append([title, product_url, price, stars, amount_reviews, discount, text,
+                             date_today, position, category, siteuse, city])
+            except Exception as e:
+                logger_err.error(f"Error processing debug tour item for city {city}: {str(e)}", exc_info=True)
+
+    try:
+        df = pd.DataFrame(data, columns=['Tytul', 'Tytul URL', 'Cena', 'Opinia', 'IloscOpini',
+                                         'Przecena', 'Tekst', 'Data zestawienia', 'Pozycja',
+                                         'Kategoria', 'SiteUse', 'Miasto'])
+        df['Pozycja'] = df.groupby('Kategoria').cumcount() + 1
+        file_path = fr'{output_viator}/{date_today}-{city}-Viator.csv'
+        df.to_csv(file_path, header=not os.path.exists(file_path), index=False, mode='a')
+        if DEBUG:
+            print(f"CSV written to {file_path}")
+    except Exception as e:
+        logger_err.error(f"Error writing CSV file for city {city}: {str(e)}", exc_info=True)
+        return None
+
     if DEBUG:
-        display(df)
-    df['Pozycja'] = df.groupby('Kategoria').cumcount() + 1
-    file_path = fr'{output_viator}/{date_today}-{city}-Viator.csv' 
-    df.to_csv(file_path, header=not os.path.exists(file_path), index=False, mode='a')
+        print("Data extraction complete. Data length:", len(data))
+    return data
+
 
 # %%
 def process_city(row, thread_name = None):
@@ -786,30 +829,66 @@ def calculate_max_pages(city_input, category_input):
 def make_request(url):
     params = {
         'url': url,
-        'apikey': API_KEY_ZENROWS,
+        'apikey': API_KEY_ZENROWS,  # Mask this in logs if necessary.
         'js_render': 'true',
         'json_response': 'true',
-        # 'js_instructions': """[{"click":".selector"},{"wait":500},{"fill":[".input","value"]},{"wait_for":".slow_selector"}]""",
         'premium_proxy': 'true',
     }
-    return requests.get('https://api.zenrows.com/v1/', params=params)
-
-def save_data(response, city_input, category_input, url, page, city_path_done):
+    # Create a masked version of the parameters for logging.
+    # masked_params = {k: (v if k != 'apikey' else '****') for k, v in params.items()}
+    # logger_info.info("Starting request to Zenrows API for URL: %s with params: %s", url, masked_params)
+    
     try:
-        data_send_df = pd.DataFrame({
-            'UrlRequest': [url],
-            'City': city_input,
-            'Page': [page],
-            'Category': category_input
-        }, columns=['UrlRequest', 'City', 'Page', 'Category'])
-        data_send_df.to_csv(city_path_done, header=not os.path.exists(city_path_done), index=False, mode='a')
-        logger_done.info(f'Data for {city_input}-{category_input}, Page {page} saved on disk')
-        process_html_from_response_zenrows(response, city_input, category_input)
-    except json.JSONDecodeError:
-        print("JSON could not be decoded")
+        response = requests.get('https://api.zenrows.com/v1/', params=params, timeout=60)
+        response.raise_for_status()  # Raise an exception for HTTP error codes.
+        logger_info.info("Successfully received response from Zenrows API for URL: %s, Status Code: %d", url, response.status_code)
+        return response
+    except requests.exceptions.HTTPError as http_err:
+        logger_err.error("HTTP error occurred while requesting Zenrows for URL %s: %s", url, http_err, exc_info=True)
+    except requests.exceptions.Timeout as timeout_err:
+        logger_err.error("Timeout error occurred while requesting Zenrows for URL %s: %s", url, timeout_err, exc_info=True)
+    except Exception as err:
+        logger_err.error("Unexpected error occurred while requesting Zenrows for URL %s: %s", url, err, exc_info=True)
+    
+    return None
 
+
+
+def save_data(response, city_input, category_input, url, page, city_path_done, max_retries=5):
+    retries = 0
+    while retries < max_retries:
+        try:
+            # Try to process the HTML response
+            process_html_from_response_zenrows(response, city_input, category_input, DEBUG=DEBUG)
+            
+            # If processing is successful, save the data
+            data_send_df = pd.DataFrame({
+                'UrlRequest': [url],
+                'City': city_input,
+                'Page': [page],
+                'Category': category_input
+            }, columns=['UrlRequest', 'City', 'Page', 'Category'])
+            
+            data_send_df.to_csv(city_path_done, header=not os.path.exists(city_path_done), index=False, mode='a')
+            logger_done.info(f'Data for {city_input}-{category_input}, Page {page} saved on disk')
+            break  # Exit the loop if everything worked fine
+
+        except ValueError as ve:
+            # This block catches the error raised in process_html_from_response_zenrows
+            logger_err.error(f"Error: {ve}. Retrying request for {city_input}-{category_input}, Page {page} (Attempt {retries+1})")
+            logger_done.error(f"Error: {ve}. Retrying request for {city_input}-{category_input}, Page {page} (Attempt {retries+1})")
+            response = make_request(url)  # Replace with your actual request function
+            retries += 1
+
+        except json.JSONDecodeError:
+            logger_err.error("JSON could not be decoded")
+            break  # Break out if the response isn't JSON decodeable
+
+    if retries == max_retries:
+        logger_err.error(f"Maximum retries reached for {city_input}-{category_input}, Page {page}. Data not saved.")
 def send_url_to_process_zenrows(df_links):
-    with concurrent.futures.ThreadPoolExecutor() as executor:
+    max_workers = 10  # Specify a reasonable limit for the number of threads
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {}
         for index, row in df_links.iterrows():
             thread_name = f"CityProcessor-{row['City']}-{row['MatchCategory']}-index-{index}"

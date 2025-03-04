@@ -83,7 +83,9 @@ def load_csv(file_path):
     except Exception as e:
         print(f"Error loading CSV: {e}")
         return None
-    
+
+
+
 file_path_manager = FilePathManager('N/A', 'N/A')
 df = load_csv(file_path_manager.pdf_report_config_file_path)
 df_to_process = df[df['Status'] != 'Done']
