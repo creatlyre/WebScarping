@@ -461,9 +461,11 @@ def transform_upload_to_refined(local_file_path, storage_account_name, storage_a
             df = df[df['Tytul'] != 'Tytul']
             df = df[df['Data zestawienia'] != 'Data zestawienia']
             df = df[df['Data zestawienia'].str.len() > 4]
+            df = df[df['Tytul URL'].str.len() > 10]
             df['Tytul URL'] = df['Tytul URL'].str.replace('\\"', '', regex=True)
             df['Tytul URL'] = df['Tytul URL'].str.replace('\"', '', regex=True)
             df['Tytul URL'] = df['Tytul URL'].str.replace(r'\\', '', regex=True)
+            
             df['IloscOpini'] = df['IloscOpini'].astype(str).str.replace(',','')
             df['Pozycja'] = df.groupby('Kategoria').cumcount() + 1
             # Convert the 'date_column' to datetime, invalid parsing will be set as NaT
@@ -478,7 +480,7 @@ def transform_upload_to_refined(local_file_path, storage_account_name, storage_a
             if missing_cena_count / total_records > 0.1:
                 raise ValueError(f"Error: More than 10% ({missing_cena_count}/{total_records}) of 'Cena' values are missing. Data processing stopped.")
             
-            missing_cena_positions = df[df['Cena'].isna()]['Pozycja'].tolist()
+            missing_cena_positions = df[(df['Cena'].isna()) & (df['Kategoria'] == 'Global')]['Pozycja'].tolist()
             
             if any(pos <= 20 for pos in missing_cena_positions):
                 raise ValueError("Error: 'Cena' is missing in the first 20 products. Data processing stopped.")
