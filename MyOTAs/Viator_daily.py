@@ -25,6 +25,7 @@ from azure.storage.blob import BlobServiceClient
 # import ctypes  # An included library with Python install.   
 import random
 import requests
+from requests.adapters import HTTPAdapter, Retry
 import json
 import concurrent.futures
 import Azure_stopVM
@@ -35,7 +36,7 @@ import csv
 # File paths
 date_today = datetime.date.today().strftime("%Y-%m-%d")
 DEBUG = False
-# date_today = '2025-03-01'
+# date_today = '2025-03-05'
 output_viator = r'G:/.shortcut-targets-by-id/1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2/MyOTAs/Baza Excel/Viator/Daily'
 archive_folder = fr'{output_viator}/Archive'
 file_path_done =fr'{output_viator}/{date_today}-DONE-Viator.csv'  
@@ -56,8 +57,8 @@ storage_account_name = "storagemyotas"
 storage_account_key = "vyHHUXSN761ELqivtl/U3F61lUY27jGrLIKOyAplmE0krUzwaJuFVomDXsIc51ZkFWMjtxZ8wJiN+AStbsJHjA=="
 
 # Set the name of the container and the desired blob name
-container_name_raw = "raw/daily/Viator"
-container_name_refined = "refined/daily/Viator"
+container_name_raw = "raw/daily/viator"
+container_name_refined = "refined/daily/viator"
 
 blob_name = fr'Viator - {date_today}.xlsx'
 file_path_logs_processed = fr'G:/.shortcut-targets-by-id/1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2/MyOTAs/Baza Excel/Logs/files_processed/{blob_name.split(".")[0]}'
@@ -554,6 +555,7 @@ def transform_upload_to_refined(local_file_path, storage_account_name, storage_a
     container_client = blob_service_client.get_container_client(container_name_refined)
 
     # Upload the modified Excel file to Azure Blob Storage
+    logger_info.info(f"Uploading Blob to Azure Storage (refined): {blob_name}")
     with open(output_file_path, "rb") as data:
         container_client.upload_blob(name=blob_name, data=data)
         
@@ -566,55 +568,113 @@ def transform_upload_to_refined(local_file_path, storage_account_name, storage_a
 # %%
 def extract_data_html_data_automation(tour_item):
     try:
-        title = tour_item.select_one("[data-automation*=ttd-product-list-card-title]").get_text()
-        price_container = tour_item.select_one("[data-automation*=ttd-product-list-card-price]")
-        price = price_container.select_one("[class*=currentPrice]").text.strip()
+        # Extract title
         try:
-            part_url = tour_item.select_one("[data-automation=ttd-product-list-card-link]").get('href')
-        except:
+            title_element = tour_item.select_one("[data-automation*=ttd-product-list-card-title]")
+            title = title_element.get_text().strip() if title_element else None
+            if not title:
+                raise ValueError("Title element is missing or empty.")
+        except Exception as e:
+            logger_err.exception("Error extracting title from tour_item")
+            title = None
+
+        # Extract price container and price
+        try:
+            price_container = tour_item.select_one("[data-automation*=ttd-product-list-card-price]")
+            if not price_container:
+                raise ValueError("Price container not found.")
+            current_price_element = price_container.select_one("[class*=currentPrice]")
+            if not current_price_element:
+                raise ValueError("Current price element not found in price container.")
+            price = current_price_element.text.strip()
+        except Exception as e:
+            logger_err.exception(f"Error extracting price for item '{title}'")
+            price = None
+
+        # Extract part_url using two strategies
+        part_url = ""
+        try:
+            link_element = tour_item.select_one("[data-automation=ttd-product-list-card-link]")
+            if link_element and link_element.get('href'):
+                part_url = link_element.get('href')
+            else:
+                raise ValueError("Link element missing or 'href' not found.")
+        except Exception as e:
+            logger_err.exception(f"First attempt to extract href failed for item '{title}'")
             try:
-                part_url = tour_item['href'].split('"')[1].split('\\')[0]
-            except:
-                logger_err.error(f"No able to find the HREF for {title}, moving further")
+                if 'href' in tour_item.attrs:
+                    part_url = tour_item['href'].split('"')[1].split('\\')[0]
+                else:
+                    raise ValueError("tour_item does not have an 'href' attribute")
+            except Exception as e2:
+                logger_err.exception(f"Second attempt to extract href failed for item '{title}'")
                 part_url = ""
                 
-        product_url = f"https://www.viator.com{part_url}"
+        product_url = f"https://www.viator.com{part_url}" if part_url else None
         siteuse = 'Viator'
+
+        # Extract discount if available
         try:
-            discount = price_container.select_one("[class*=discountPriceContainer]").select_one("[class*=originalPrice]").text.strip()
-        except:
+            discount_container = price_container.select_one("[class*=discountPriceContainer]")
+            if discount_container:
+                original_price_element = discount_container.select_one("[class*=originalPrice]")
+                discount = original_price_element.text.strip() if original_price_element else 'N/A'
+            else:
+                discount = 'N/A'
+        except Exception as e:
+            logger_err.exception(f"Error extracting discount for item '{title}'")
             discount = 'N/A'
 
-        amount_reviews = 'N/A'
-        #NUMBER OF REVIEWS
+        # Extract number of reviews
         try:
-            amount_reviews = tour_item.select_one("[class*=reviewCount]").text.strip()
-        except:
-            pass
+            review_element = tour_item.select_one("[class*=reviewCount]")
+            amount_reviews = review_element.text.strip() if review_element else 'N/A'
+        except Exception as e:
+            logger_err.exception(f"Error extracting review count for item '{title}'")
+            amount_reviews = 'N/A'
 
+        # Extract rating/stars
         try:
-            start_amount = tour_item.select_one("[class*=rating__JCMy]").text.strip()
-            stars = f'star-{str(start_amount)}'
-        except:
+            rating_element = tour_item.select_one("[class*=rating__JCMy]")
+            start_amount = rating_element.text.strip() if rating_element else 'N/A'
+            if start_amount:
+                stars = f'star-{str(start_amount)}'
+        except Exception as e:
+            logger_err.exception(f"Error extracting rating using primary method for item '{title}'")
             try:
                 star_int = 0
-                stars_grouped = tour_item.select_one("[class*=stars]").find_all('svg')
-                half_star = 'M14'
-                for st in stars_grouped:
-                    path_text = str(st.find('path')['d'])
-                    if half_star in path_text:
-                        star_int = star_int + 0.5
-                    else:
-                        if '0a.77.77' in str(st):
-                            star_int = star_int + 1
-                stars = f'star-{str(star_int)}'
-            except:
+                stars_container = tour_item.select_one("[class*=stars]")
+                if stars_container:
+                    stars_grouped = stars_container.find_all('svg')
+                    half_star = 'M14'
+                    for st in stars_grouped:
+                        path_element = st.find('path')
+                        if path_element and 'd' in path_element.attrs:
+                            path_text = str(path_element['d'])
+                            if half_star in path_text:
+                                star_int += 0.5
+                            elif '0a.77.77' in str(st):
+                                star_int += 1
+                        else:
+                            logger_err.error(f"SVG path element missing in star for item '{title}'")
+                    stars = f'star-{star_int}'
+                else:
+                    raise ValueError("Stars container not found.")
+            except Exception as e2:
+                logger_err.exception(f"Error extracting rating using secondary method for item '{title}'")
                 stars = 'N/A'
 
-        text = tour_item.text.strip()
+        # Extract full text
+        try:
+            text = tour_item.text.strip()
+        except Exception as e:
+            logger_err.exception(f"Error extracting text for item '{title}'")
+            text = ""
+
         return title, product_url, price, stars, amount_reviews, discount, text, siteuse
+
     except Exception as e:
-        logger_err.error(f"Error processing tour item: {str(e)}")
+        logger_err.exception("General error processing tour item in extract_data_html_data_automation")
         return None, None, None, None, None, None, None, None
     
 def extract_data_html_debug_version(tour_item):
@@ -680,8 +740,10 @@ def process_html_from_response_zenrows(response, city, category, position=0, DEB
         tour_items = []
         
     if len(tour_items) == 0:
-        logger_err.error(f"No tour items found for city {city}, category {category}")
+        x_request_id = response.headers.get("X-Request-Id", "N/A")
+        logger_err.error(f"No tour items found for city {city}, category {category}. "f"X-Request-Id: {x_request_id}")
         raise ValueError("No tour items found.")
+
     try:
         tour_promoted = soup.select("[class*=productListCardWithDebug__pr66]")
         if DEBUG:
@@ -778,7 +840,7 @@ def process_city(row, thread_name = None):
     while page <= max_pages:
         url = f'{url_input}' if page == 1 else f'{url_input}/{page}'
         logger_info.info(f'Processing: {city_input}, {category_input}, Page: {page} of max {max_pages}, URL: {url}')
-        response = make_request(url)
+        response = make_request(url, wait=100)
         logger_info.info(current_thread().name)
         if response and response.status_code == 200:
             try:
@@ -826,21 +888,46 @@ def calculate_max_pages(city_input, category_input):
         return 13
     return 25 if category_input == 'Global' else 2
 
-def make_request(url):
+def make_request(url, js_render=True, json_response=True, premium_proxy=True,
+                 wait_for=None, wait=0, session_id=None, proxy_country=None):
+    # Build the parameters dictionary.
     params = {
         'url': url,
-        'apikey': API_KEY_ZENROWS,  # Mask this in logs if necessary.
-        'js_render': 'true',
-        'json_response': 'true',
-        'premium_proxy': 'true',
+        'apikey': API_KEY_ZENROWS,  # Mask this in logs.
+        'js_render': 'true' if js_render else 'false',
+        'json_response': 'true' if json_response else 'false',
+        'premium_proxy': 'true' if premium_proxy else 'false'
     }
-    # Create a masked version of the parameters for logging.
-    # masked_params = {k: (v if k != 'apikey' else '****') for k, v in params.items()}
-    # logger_info.info("Starting request to Zenrows API for URL: %s with params: %s", url, masked_params)
     
+    # Add optional parameters if provided.
+    if wait_for:
+        params['wait_for'] = wait_for
+    if wait:
+        params['wait'] = wait
+    if session_id:
+        params['session_id'] = session_id
+    if proxy_country:
+        params['proxy_country'] = proxy_country
+
+    # Mask the API key for logging.
+    masked_params = {k: (v if k != 'apikey' else '****') for k, v in params.items()}
+    logger_info.info("Starting request to Zenrows API for URL: %s with params: %s", url, masked_params)
+
+    # Set up a requests session with retry configuration.
+    session = requests.Session()
+    retries = Retry(
+        total=3,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET"]
+    )
+    adapter = HTTPAdapter(max_retries=retries)
+    session.mount('https://', adapter)
+    session.mount('http://', adapter)
+
     try:
-        response = requests.get('https://api.zenrows.com/v1/', params=params, timeout=60)
-        response.raise_for_status()  # Raise an exception for HTTP error codes.
+        response = session.get('https://api.zenrows.com/v1/', params=params, timeout=60)
+        response.raise_for_status()  # Raises HTTPError for 4xx/5xx responses.
         logger_info.info("Successfully received response from Zenrows API for URL: %s, Status Code: %d", url, response.status_code)
         return response
     except requests.exceptions.HTTPError as http_err:
@@ -877,7 +964,7 @@ def save_data(response, city_input, category_input, url, page, city_path_done, m
             # This block catches the error raised in process_html_from_response_zenrows
             logger_err.error(f"Error: {ve}. Retrying request for {city_input}-{category_input}, Page {page} (Attempt {retries+1})")
             logger_done.error(f"Error: {ve}. Retrying request for {city_input}-{category_input}, Page {page} (Attempt {retries+1})")
-            response = make_request(url)  # Replace with your actual request function
+            response = make_request(url, wait=retries*1000)  # Replace with your actual request function
             retries += 1
 
         except json.JSONDecodeError:
