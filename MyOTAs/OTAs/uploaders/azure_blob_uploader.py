@@ -48,7 +48,7 @@ class AzureBlobUploader:
         Transforms and uploads the Excel file to Azure Blob Storage under the "refined" container.
         """
         exclude_sheets = ['Sheet1', 'Data', 'Re-Run', 'DONE']
-        output_file_path = "temp_file.xlsx"  # Temporary file for transformation
+        output_file_path = f"{self.file_manager.site}_temp_file.xlsx"  # Temporary file for transformation
 
         try:
             # Read the Excel file into a Pandas DataFrame
