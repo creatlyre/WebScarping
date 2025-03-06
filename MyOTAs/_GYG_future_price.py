@@ -212,12 +212,14 @@ def process_days_not_available(activity_title, language, adults_amount, option_d
         logger.logger_err.error(f"An error occurred in process_days_not_available for URL {url} on date {option_date}: {e}")
         raise
 
-def retry_click_if_intercepted(action, driver, url, max_retries=3):
+def retry_click_if_intercepted(action, driver, url, check_availability_button, max_retries=3):
     retries = 0
     while retries < max_retries:
         try:
             action()
+            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", check_availability_button)
             return  # If successful, exit the loop
+        
         except ElementClickInterceptedException:
             logger.logger_info.info(f"Click intercepted. Retrying after checking cookies for URL: {url}")
             check_and_click_only_essential(driver, url)
@@ -270,7 +272,7 @@ def get_future_price(driver, url, viewer, city, language, adults_amount, max_day
                 logger.logger_done.info(f'URL was already processed today up to date: {max_date_done}')
                 return
             else:
-                logger.logger_info.info(f'Continuing from last processed date: {max_date_done}')
+                logger.logger_info.info(f'Continue from last processed date: {max_date_done}')
                 full_url = full_url.replace(start_collection_date, max_date_done.strftime('%Y-%m-%d'))
                 driver.get(full_url)
                 check_and_click_only_essential(driver, url)
@@ -284,19 +286,23 @@ def get_future_price(driver, url, viewer, city, language, adults_amount, max_day
             return
 
         booking_tile = WebDriverWait(driver, 60).until(EC.visibility_of_element_located((By.CSS_SELECTOR, "div[data-track='booking-assistant']")))
-        calendar_picker = booking_tile.find_element(By.CSS_SELECTOR, "section[class='ba-dropdown ba-date-picker']")
+        calendar_picker = booking_tile.find_element(By.CSS_SELECTOR, "div[class='c-dropdown c-datepicker-desktop']")
         check_availability_button = WebDriverWait(booking_tile, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "button[class*='js-check-availability']")))
 
         time.sleep(2)
-        retry_click_if_intercepted(lambda: driver.execute_script("arguments[0].click();", check_availability_button), driver, url)
+        retry_click_if_intercepted(lambda: driver.execute_script("arguments[0].click();", check_availability_button), driver, url, check_availability_button)
+        section_month_calendar_overlay = 'c-datepicker-month'
+        section_month_day_container_calendar_overlay = "div[class='c-datepicker-day__container']"
+        section_month_day_not_availabe_calendar_overlay = "div[class='c-datepicker-day__container c-datepicker-day--disabled']"
+
         # driver.execute_script("arguments[0].click();", check_availability_button)
         # Handle potential date unavailability
         try:
-            WebDriverWait(driver, 5).until(EC.visibility_of_element_located((By.CLASS_NAME, 'dayContainer')))
-            months = driver.find_elements(By.CLASS_NAME, 'dayContainer')
+            WebDriverWait(driver, 5).until(EC.visibility_of_element_located((By.CLASS_NAME, section_month_calendar_overlay)))
+            months = driver.find_elements(By.CLASS_NAME, section_month_calendar_overlay )
             empty = True
             for month in months:
-                days_available = month.find_elements(By.CSS_SELECTOR, "span[data-test-id=ba-calendar-day-available]")
+                days_available = month.find_elements(By.CSS_SELECTOR, section_month_day_container_calendar_overlay)
                 if len(days_available) == 0:
                     continue
                 for day in days_available:
@@ -335,24 +341,26 @@ def get_future_price(driver, url, viewer, city, language, adults_amount, max_day
         except Exception as e:
             check_for_modal_window_to_close(driver, calendar_picker)
 
-        WebDriverWait(driver, 60).until(EC.visibility_of_element_located((By.CLASS_NAME, 'dayContainer')))
+        WebDriverWait(driver, 60).until(EC.visibility_of_element_located((By.CLASS_NAME, section_month_calendar_overlay)))
 
         # Iterate through months and days
         current_year = current_date.year
         for i in range(month_to_complete):
-            months = driver.find_elements(By.CLASS_NAME, 'dayContainer')
+            months = driver.find_elements(By.CLASS_NAME, section_month_calendar_overlay)
             month_index = 0
             month = months[month_index]
-            current_month = driver.find_elements(By.CLASS_NAME, "flatpickr-current-month")[month_index].text.strip()
-
+            current_month = driver.find_elements(By.CLASS_NAME, "c-datepicker-month__name")[month_index].text.strip()
+            current_month = current_month.split()[0]
             if current_month == "January" and datetime.datetime.now().month != 1: 
                 current_year += 1
 
             days_to_complete = []
-            days_available = month.find_elements(By.CSS_SELECTOR, "span[data-test-id=ba-calendar-day-available]")
+            days_available = month.find_elements(By.CSS_SELECTOR, section_month_day_container_calendar_overlay)
             for day in days_available:
                 if len(day.text) > 0:
-                    day_date_str = f"{current_month} {day.text.strip()}, {current_year}"
+                    day = day.text.split('%\n')[-1]
+
+                    day_date_str = f"{current_month} {day}, {current_year}"
                     day_date_obj = datetime.datetime.strptime(day_date_str, '%B %d, %Y')
                     if date_today_obj <= day_date_obj <= picked_max_date_obj:
                         if is_done and day_date_obj.date() >= max_date_done:
@@ -361,24 +369,24 @@ def get_future_price(driver, url, viewer, city, language, adults_amount, max_day
                             days_to_complete.append(day_date_str)
 
             # Process days not available
-            days_not_available_elements = month.find_elements(By.CSS_SELECTOR, "span[data-test-id=ba-calendar-day]")
+            days_not_available_elements = month.find_elements(By.CSS_SELECTOR, section_month_day_not_availabe_calendar_overlay)
             days_not_available = get_days_not_available(date_today_obj, picked_max_date_obj, current_year, current_month, days_not_available_elements)
 
             for day_na in days_not_available:
                 list_of_items = process_days_not_available(activity_title, language, adults_amount, day_na, url_id, viewer, config.extraction_date)
                 df = pd.DataFrame(list_of_items)
-                logger.logger_done.info(f'Saving date: {day_na} to file: not available date')
+                logger.logger_done.info(f'Saving date: {day_na} to file: "N/A not available date')
                 df = save_and_erase_dataframe(df, url_city_id, url_unique_identifier, config)
 
             # Iterate through days to complete
             for day in days_to_complete:
                 try:
-                    day_element = month.find_element(By.CSS_SELECTOR, f"span[aria-label*='{day}']")
+                    day_element = month.find_element(By.CSS_SELECTOR, f"div[aria-label*='{day}']")
                     day_element.click()
                 except StaleElementReferenceException:
-                    months = driver.find_elements(By.CLASS_NAME, 'dayContainer')
+                    months = driver.find_elements(By.CLASS_NAME, section_month_calendar_overlay)
                     month = months[month_index]
-                    day_element = month.find_element(By.CSS_SELECTOR, f"span[aria-label*='{day}']")
+                    day_element = month.find_element(By.CSS_SELECTOR, f"div[aria-label*='{day}']")
                     day_element.click()
                 except Exception as e:
                     logger.logger_err.error(f"An error occurred while selecting day {day} for url {url}: {e}")
@@ -386,8 +394,7 @@ def get_future_price(driver, url, viewer, city, language, adults_amount, max_day
 
                 WebDriverWait(driver, 60).until(EC.visibility_of_element_located((By.TAG_NAME, 'details')))
                 option_details = driver.find_elements(By.TAG_NAME, 'details')
-                time.sleep(1
-                )
+                time.sleep(1)
                 list_of_items = extract_options(driver, option_details, activity_title, language, adults_amount, url_id, viewer, config.extraction_date)
                 df = pd.DataFrame(list_of_items)
                 save_date_to_file = driver.current_url.split('date_from=')[-1].split('&')[0]
@@ -396,7 +403,7 @@ def get_future_price(driver, url, viewer, city, language, adults_amount, max_day
                 check_for_modal_window_to_close(driver, calendar_picker)
 
             # Navigate to next month
-            next_month_button = driver.find_element(By.CSS_SELECTOR, "span[class='flatpickr-next-month']")
+            next_month_button = driver.find_element(By.CSS_SELECTOR, "button[data-test-id='c-datepicker-month__arrow-right']")
             next_month_button.click()
             time.sleep(0.5)
 
