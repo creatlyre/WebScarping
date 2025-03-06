@@ -117,12 +117,13 @@ class ScraperCivitatis(ScraperBase):
     def scrape_products(self, products_count, global_category=False, products_per_page=20):
         products_collected = 0
         page_number = 1
+        data = []
+        position = 1
+
         ## Loop thorugh all pages
         self.logger.logger_info.info(f"Scraping up to products count: {products_count} and 80% is: {products_count * 0.8}")
         while products_collected < products_count * 0.8:
             products = self.driver.find_elements(By.CSS_SELECTOR, self.css_product_card)
-            data = []
-            position = 1
             
             for product in products:
                 product_data = self.extract_product_data(
@@ -147,8 +148,9 @@ class ScraperCivitatis(ScraperBase):
     def extract_product_data(
         self, product, position, global_category=False
     ):
-        product_title = product.find_element(By.TAG_NAME, 'a').text
-        product_url = product.find_element(By.TAG_NAME, 'a').get_attribute('href')
+        product_link = product.find_element(By.CSS_SELECTOR, 'a[data-gtm-new-model-click]')
+        product_title = product_link.get_attribute('title')
+        product_url = product_link.get_attribute('href')
 
         try:
             product_price = product.find_element(

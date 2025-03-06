@@ -7,13 +7,13 @@
 	},
 	"Musement": {
 		"settings": {
-			"city": ["Athens", "Barcelona", "Florence", "Heraklion", "Lisbon", "London", "Munich", "Porto", "Rome", "Sintra", "Napels"],
+			"city": ["Athens", "Barcelona", "Florence", "Heraklion", "Lisbon", "London", "Munich", "Porto", "Rome", "Sintra", "Naples"],
 			"url": "https://www.musement.com/uk/city/"
 		}
 	},
 	"Civitatis": {
 		"settings": {
-			"city": ["Athens", "Barcelona", "Florence", "Heraklion", "Lisbon", "London", "Munich", "Porto", "Rome", "Sintra", "Napels"],
+			"city": ["Athens", "Barcelona", "Florence", "Heraklion", "Lisbon", "London", "Munich", "Porto", "Rome", "Sintra", "Naples"],
 			"url": "https://www.civitatis.com/en/city/"
 		}
 	}

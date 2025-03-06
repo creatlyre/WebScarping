@@ -25,11 +25,11 @@ css_selectors = {
     'view_more_button': 'button[data-test-id="search-component-test-btn"]',
     'show_more_button': 'a[data-qa-marker*="loading-button"]',
     'product_card': 'div[id*="activitiesItem"]',
-    'tour_price': 'span[data-test="realPrice"]',
-    'tour_price_discount': 'div[class="tour-scratch-price"]',
-    'ratings': 'div[data-test="reviewTest"]',
-    'review_count': 'p[class*="reviewsNumber"]',
-    'category_label': 'div[data-test="main-category"]',
+    'tour_price': 'span[class="comfort-card__price__text"]',
+    'tour_price_discount': 'div[class="comfort-card__price__old-text"]',
+    'ratings': 'span[class="m-rating--text"]',
+    'review_count': 'span[class="text--rating-total"]',
+    'category_label': 'span[class*="_feature-category"]',
     'js_script_for_shadow_root': 'return document.querySelector("msm-cookie-banner").shadowRoot',
     'cookies_banner': 'button[data-test*="decline-cookies"]',
     'sort_by': 'select[data-test-id="search-component-sort-selector"]',
@@ -41,7 +41,7 @@ css_selectors = {
 site = "Civitatis"
 file_manager_logger = FilePathManager(site, "NA")
 logger = LoggerManager(file_manager_logger)
-DEBUG = DetermineDebugRun(check_for_debug=True)
+DEBUG = DetermineDebugRun(check_for_debug=False)
 # %%
 
 
