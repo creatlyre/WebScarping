@@ -9,7 +9,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(current_dir, '..'))
 sys.path.append(project_root)
 
-from scrapers.scraper_musement import ScraperMusement
+from scrapers.scraper_civitatis import ScraperCivitatis
 from file_management.file_path_manager import FilePathManager, DetermineDebugRun
 from logger.logger_manager import LoggerManager
 from uploaders.azure_blob_uploader import AzureBlobUploader
@@ -19,12 +19,12 @@ import json
 
 # %%
 css_selectors = {
-    'currency': 'div[data-test*="dropdown-currency"]',
-    'currency_list': 'section[class*="row-start-center"]',
-    'products_count': 'span[data-test-id*="search-component-activity-count-text"]',
+    'currency': 'span[id="currencySelectorButton"]',
+    'currency_list': 'span[data-testid="page-nav__currency_EUR"]',
+    'products_count': 'div[class*="search-result"]',
     'view_more_button': 'button[data-test-id="search-component-test-btn"]',
     'show_more_button': 'a[data-qa-marker*="loading-button"]',
-    'product_card': 'div[data-test*="ActivityCard"]',
+    'product_card': 'div[id*="activitiesItem"]',
     'tour_price': 'span[data-test="realPrice"]',
     'tour_price_discount': 'div[class="tour-scratch-price"]',
     'ratings': 'div[data-test="reviewTest"]',
@@ -38,10 +38,10 @@ css_selectors = {
 }
 
 
-site = "Musement"
+site = "Civitatis"
 file_manager_logger = FilePathManager(site, "NA")
 logger = LoggerManager(file_manager_logger)
-DEBUG = DetermineDebugRun(check_for_debug=False)
+DEBUG = DetermineDebugRun(check_for_debug=True)
 # %%
 
 
@@ -61,7 +61,7 @@ for city in cities:
         file_manager = FilePathManager(site, city, True, '1111-11-11')
     else:
         file_manager = FilePathManager(site, city)
-    scraper = ScraperMusement(url, city, css_selectors, file_manager, logger)
+    scraper = ScraperCivitatis(url, city, css_selectors, file_manager, logger)
     
     
     if scraper.is_city_already_done():
@@ -74,8 +74,8 @@ for city in cities:
     scraper.get_url()
     scraper.select_currency()
     products_count = scraper.get_product_count()
-    scraper.load_all_products_by_button(products_count)
-    df = scraper.scrape_products(global_category=True)
+
+    df = scraper.scrape_products(products_count=products_count, global_category=True)
     scraper.save_to_csv(df)
     if DEBUG.debug:
         break
