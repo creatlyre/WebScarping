@@ -1,20 +1,134 @@
 {
-	"Headout": {
-		"settings": {
-			"city": ["Athens", "Barcelona", "Florence", "Heraklion", "Lisbon", "London", "Munich", "Porto", "Rome", "Sintra", "Naples"],
-			"url": "https://www.headout.com/tours/city/"
-		}
-	},
-	"Musement": {
-		"settings": {
-			"city": ["Athens", "Barcelona", "Florence", "Heraklion", "Lisbon", "London", "Munich", "Porto", "Rome", "Sintra", "Naples"],
-			"url": "https://www.musement.com/uk/city/"
-		}
-	},
-	"Civitatis": {
-		"settings": {
-			"city": ["Athens", "Barcelona", "Florence", "Heraklion", "Lisbon", "London", "Munich", "Porto", "Rome", "Sintra", "Naples"],
-			"url": "https://www.civitatis.com/en/city/"
-		}
-	}
+    "Headout": {
+        "settings": {
+            "city": [
+                "Athens",
+                "Barcelona",
+                "Florence",
+                "Heraklion",
+                "Lisbon",
+                "London",
+                "Munich",
+                "Porto",
+                "Rome",
+                "Sintra",
+                "Naples"
+            ],
+            "url": "https://www.headout.com/tours/city/"
+        }
+    },
+    "Musement": {
+        "settings": {
+            "city": [
+                "Athens",
+                "Barcelona",
+                "Florence",
+                "Heraklion",
+                "Lisbon",
+                "London",
+                "Munich",
+                "Porto",
+                "Rome",
+                "Sintra",
+                "Naples"
+            ],
+            "url": "https://www.musement.com/uk/city/"
+        }
+    },
+    "Civitatis": {
+        "settings": {
+            "city": [
+                "Athens",
+                "Barcelona",
+                "Florence",
+                "Heraklion",
+                "Lisbon",
+                "London",
+                "Munich",
+                "Porto",
+                "Rome",
+                "Sintra",
+                "Naples"
+            ],
+            "url": "https://www.civitatis.com/en/city/",
+            "Sintra": {
+                "5": "Entrance tickets",
+                "4": "Adventure and nature",
+                "1": "Guided tours and free tours",
+                "2": "Day trip",
+                "12": "Additional services",
+                "11": "Transport and transfers"
+            },
+            "Athens": {
+                "1": "Guided tours and free tours",
+                "5": "Entrance tickets",
+                "2": "Day trip",
+                "3": "Tour packages",
+                "8": "Boat tour"
+            },
+            "Barcelona": {
+                "1": "Guided tours and free tours",
+                "5": "Entrance tickets",
+                "2": "Day trip",
+                "4": "Adventure and nature",
+                "8": "Boat tour"
+            },
+            "Florence": {
+                "1": "Guided tours and free tours",
+                "2": "Day trip",
+                "9": "Food and wine tourism",
+                "5": "Entrance tickets",
+                "6": "Performances"
+            },
+            "Heraklion": {
+                "2": "Day trip",
+                "1": "Guided tours and free tours",
+                "4": "Adventure and nature",
+                "12": "Additional services",
+                "7": "Aerial tours"
+            },
+            "Lisbon": {
+                "2": "Day trip",
+                "1": "Guided tours and free tours",
+                "5": "Entrance tickets",
+                "8": "Boat tour",
+                "4": "Adventure and nature"
+            },
+            "London": {
+                "5": "Entrance tickets",
+                "1": "Guided tours and free tours",
+                "2": "Day trip",
+                "8": "Boat tour",
+                "11": "Transport and transfers"
+            },
+            "Munich": {
+                "1": "Guided tours and free tours",
+                "2": "Day trip",
+                "5": "Entrance tickets",
+                "12": "Additional services",
+                "9": "Food and wine tourism"
+            },
+            "Porto": {
+                "1": "Guided tours and free tours",
+                "9": "Food and wine tourism",
+                "8": "Boat tour",
+                "2": "Day trip",
+                "4": "Adventure and nature"
+            },
+            "Rome": {
+                "1": "Guided tours and free tours",
+                "5": "Entrance tickets",
+                "2": "Day trip",
+                "9": "Food and wine tourism",
+                "6": "Performances"
+            },
+            "Naples": {
+                "1": "Guided tours and free tours",
+                "2": "Day trip",
+                "9": "Food and wine tourism",
+                "5": "Entrance tickets",
+                "12": "Additional services"
+            }
+        }
+    }
 }

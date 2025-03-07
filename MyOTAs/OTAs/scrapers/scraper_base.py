@@ -257,8 +257,6 @@ class ScraperBase:
         # Remove duplicates based on the 'Link' column
         df_day = df_day.drop_duplicates(subset=['Link'])
 
-        
-
         # Read the CSV file into a DataFrame
         # df_oper = pd.read_csv(file_path.replace('.csv', '.xlsx'))
         df_oper = pd.read_excel(file_path)
@@ -296,8 +294,9 @@ class ScraperBase:
             merged_df['Reviews'] = merged_df['Reviews'].map(lambda x: x.replace(",", '') if isinstance(x, str) else x)
             merged_df['uid'] = merged_df['Link'].apply(lambda x: str(x).split('AttractionProductReview-')[-1].split('-')[2])
             merged_df['Tytul'] = merged_df['Tytul'].str.replace(r'^\d+\.\s*', '', regex=True)
-
-
+        elif "Civitatis" in file_path:
+            merged_df['Reviews'] = merged_df['Reviews'].apply(lambda x: str(x).lower().replace(',', '').replace('s', '').replace('review', '').strip() if len(str(x)) > 0 else '0')
+            merged_df['uid'] = merged_df['Link'].apply(lambda x: str(x).split('/')[-1])
         else:
             merged_df['uid'] = merged_df['Link'].apply(lambda x: str(x).split('/')[-1])
 

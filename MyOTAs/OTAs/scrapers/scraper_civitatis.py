@@ -19,7 +19,7 @@ from scrapers.scraper_base import ScraperBase
 
 
 class ScraperCivitatis(ScraperBase):
-    def __init__(self, url, city, css_selectors, file_manager, logger, provider=False):
+    def __init__(self, url, city, css_selectors, file_manager, logger, provider=False, new_links=False):
         super().__init__(url, city, css_selectors, file_manager, logger)
 
         # Update the css_selectors with Civitatis-specific selectors
@@ -33,8 +33,23 @@ class ScraperCivitatis(ScraperBase):
         self.js_shadow_root = self.css_selectors.get('js_script_for_shadow_root')
         if provider:
             self.css_provider = self.css_selectors.get('provider')
+            self.css_provider_name = self.css_selectors.get('provider_name')
+        if new_links:
+            self.css_expand_categories_and_others = self.css_selectors.get('expand_categories_and_others')
+            self.css_expand_categories_and_others_header = self.css_selectors.get('expand_categories_and_others_header')
+            self.css_categories_show_more = self.css_selectors.get('categories_show_more')
+            self.css_categories_box_element = self.css_selectors.get('categories_box_element')
+            self.css_categories = self.css_selectors.get('categories')
         self.provider = provider
         self.wait = WebDriverWait(self.driver, 10)
+
+    def handle_cookies(self):
+        try:
+            time.sleep(0.5)
+            cookies_banner = self.driver.find_element(By.CSS_SELECTOR, self.css_cookies_banner_decline)
+            cookies_banner.click()
+        except:
+            pass
 
     def select_currency(self):
         currency_button = self.driver.find_element(By.CSS_SELECTOR, self.css_currency)
@@ -67,7 +82,44 @@ class ScraperCivitatis(ScraperBase):
         provider_name = self.driver.find_element(
             By.CSS_SELECTOR, self.css_provider
         )
+        if 'show more' in provider_name.text.lower():
+            provider_name.click()
+            time.sleep(0.5)
+            provider_name = self.driver.find_element(By.CSS_SELECTOR, self.css_provider_name)
         return provider_name
+    
+    def define_categiores_section(self):
+        expanded_categories = self.driver.find_elements(By.CSS_SELECTOR, self.css_expand_categories_and_others)
+        for section in expanded_categories:
+            try:
+                section_header = section.find_element(By.CSS_SELECTOR, self.css_expand_categories_and_others_header)
+            except:
+                continue
+            if 'categories' in section_header.text.lower():
+                categories_section = section
+                break
+        return categories_section
+
+    def load_hidden_categories(self, categories_section):
+        try:
+            categories_show_more = categories_section.find_element(By.CSS_SELECTOR, self.css_categories_show_more)
+            categories_show_more.click()
+            time.sleep(0.5)
+        except:
+            self.logger.logger_info.info("Couldn't find the show more button")
+            pass
+
+    def extract_categories(self, categories_section):
+        categories_box_element = categories_section.find_element(By.CSS_SELECTOR, self.css_categories_box_element)
+        categories = categories_box_element.find_elements(By.CSS_SELECTOR, self.css_categories)
+        return categories
+    def extract_category_data(self, category):
+        category_checkbox = category.find_element(By.TAG_NAME, 'input')
+        category_id = category_checkbox.get_attribute('id')
+        if category_id:
+            category_id_text = category_id.split('-')[-1]
+        category_name = category.find_element(By.TAG_NAME, 'label').text
+        return category_id_text, category_name
 
     def load_all_products_by_button(self, products_count, scroll_step=-100):
         current_scroll_position = self.driver.execute_script(
@@ -151,6 +203,8 @@ class ScraperCivitatis(ScraperBase):
         product_link = product.find_element(By.CSS_SELECTOR, 'a[data-gtm-new-model-click]')
         product_title = product_link.get_attribute('title')
         product_url = product_link.get_attribute('href')
+        product_number = product.find_element(By.CSS_SELECTOR, 'article[data-activity]').get_attribute('data-activity')
+        product_url = f"{product_url}{product_number}"
 
         try:
             product_price = product.find_element(

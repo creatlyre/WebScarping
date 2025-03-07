@@ -78,9 +78,8 @@ class AzureBlobUploader:
                     df['Data zestawienia'] = df['Data zestawienia'].astype('str')
                     df['IloscOpini'] = df['IloscOpini'].astype(str)
                     df['IloscOpini'] = df['IloscOpini'].fillna(0)
-                    df['IloscOpini'] = df['IloscOpini'].str.replace('(', '').str.replace(')','')
+                    df['IloscOpini'] = df['IloscOpini'].str.replace('(', '').str.replace(')','').str.replace(',', '').str.replace('s','').str.replace('review','').str.strip()
                     df['IloscOpini'] = df['IloscOpini'].apply(lambda x: int(float(x.replace('K', '')) * 1000) if isinstance(x, str) and 'K' in x else x)
-
                     df['Opinia'] = df['Opinia'].astype(str)
                     df['Opinia'] = df['Opinia'].fillna('N/A')
                     df['Opinia'] = df['Opinia'].map(lambda x: x.replace("NEW", '') if isinstance(x, str) else x)

@@ -12,7 +12,7 @@ from file_management.file_path_manager import FilePathManager
 from scrapers.scraper_base import ScraperBase
 from logger.logger_manager import LoggerManager
 
-sites = ['Tripadvisor', 'GYG', 'Viator', 'Musement', 'Headout']
+sites = ['Civitatis', 'Tripadvisor', 'GYG', 'Viator', 'Musement', 'Headout']
 for site in sites:
     file_manager = FilePathManager(site, 'N/A')
     logger = LoggerManager(file_manager, "AllLinks")

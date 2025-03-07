@@ -55,30 +55,53 @@ config = config.get(site)
 cities = config.get('settings').get('city')
 
 for city in cities:
-    url = config.get('settings').get('url').replace("city", city)
+    base_url = config.get('settings').get('url').replace("city", city)
 
     if DEBUG.debug:
         file_manager = FilePathManager(site, city, True, '1111-11-11')
     else:
         file_manager = FilePathManager(site, city)
-    scraper = ScraperCivitatis(url, city, css_selectors, file_manager, logger)
-    
-    
+
+    scraper = ScraperCivitatis(base_url, city, css_selectors, file_manager, logger)
+
+    # Check if data for the city is already collected
     if scraper.is_city_already_done():
         logger.logger_info.info(f"Data for {city} already exists. Skipping...")
         continue
     elif scraper.is_today_already_done():
-        logger.logger_info.info(f"Data for today already exists. Exitng...")
+        logger.logger_info.info(f"Data for today already exists. Exiting...")
         break
 
+    # Global Scraping (Without Category Filter)
     scraper.get_url()
     scraper.select_currency()
     products_count = scraper.get_product_count()
 
-    df = scraper.scrape_products(products_count=products_count, global_category=True)
-    scraper.save_to_csv(df)
+    df_global = scraper.scrape_products(products_count=products_count, global_category=True)
+    df_global['category'] = "Global"  # Label as 'Global' for reference
+    scraper.save_to_csv(df_global)
+
+    # Scrape for Each Category in the City
+    if city in config['settings']:
+        category_data = config['settings'][city]  # Get category mapping
+
+        for category_id, category_name in category_data.items():
+            category_url = f"{base_url}?allowedCategoryIds={category_id}"  # Modify URL for category filtering
+            logger.logger_info.info(f"Scraping {category_name} ({category_id}) for {city}...")
+
+            scraper = ScraperCivitatis(category_url, city, css_selectors, file_manager, logger)
+
+            scraper.get_url()
+            scraper.select_currency()
+            products_count = scraper.get_product_count()
+
+            df_category = scraper.scrape_products(products_count=products_count, global_category=False)
+            df_category['category'] = category_name  # Assign category name for reference
+
+            scraper.save_to_csv(df_category)
+
     if DEBUG.debug:
-        break
+        break  # Exit after first iteration for testing
     
 scraper.combine_csv_to_xlsx()
 
