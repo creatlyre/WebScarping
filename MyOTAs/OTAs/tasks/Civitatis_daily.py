@@ -81,7 +81,7 @@ for city in cities:
     df_global['category'] = "Global"  # Label as 'Global' for reference
     scraper.save_to_csv(df_global)
 
-    # Scrape for Each Category in the City
+    # Scrape for Each Category in the City 
     if city in config['settings']:
         category_data = config['settings'][city]  # Get category mapping
 
@@ -90,10 +90,15 @@ for city in cities:
             logger.logger_info.info(f"Scraping {category_name} ({category_id}) for {city}...")
 
             scraper = ScraperCivitatis(category_url, city, css_selectors, file_manager, logger)
-
+            
             scraper.get_url()
             scraper.select_currency()
-            products_count = scraper.get_product_count()
+            try:
+                products_count = scraper.get_product_count()
+            except Exception as e:
+                logger.logger_error.error(f"Error getting product count for {category_name} ({category_id}) in {city}: {e}")
+                continue
+                
 
             df_category = scraper.scrape_products(products_count=products_count, global_category=False)
             df_category['category'] = category_name  # Assign category name for reference
@@ -101,7 +106,7 @@ for city in cities:
             scraper.save_to_csv(df_category)
 
     if DEBUG.debug:
-        break  # Exit after first iteration for testing
+        break  # Exit after first iteration for testing         
     
 scraper.combine_csv_to_xlsx()
 

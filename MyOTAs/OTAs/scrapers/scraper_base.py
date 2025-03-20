@@ -28,7 +28,7 @@ class ScraperBase:
         self.css_selectors = css_selectors.copy()  # Make a copy to avoid mutation
         self.date_today = self.file_manager.date_today
         self.site = self.file_manager.site
-        # Initialize common CSS selectors
+        # Initialize common CSS selectors   
         self.css_currency = self.css_selectors.get('currency')
         self.css_currency_list = self.css_selectors.get('currency_list')
         self.css_products_count = self.css_selectors.get('products_count')
