@@ -976,7 +976,7 @@ def save_data(response, city_input, category_input, url, page, city_path_done, m
     if retries == max_retries:
         logger_err.error(f"Maximum retries reached for {city_input}-{category_input}, Page {page}. Data not saved.")
 def send_url_to_process_zenrows(df_links):
-    max_workers = 10  # Specify a reasonable limit for the number of threads
+    max_workers = 8  # Specify a reasonable limit for the number of threads
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {}
         for index, row in df_links.iterrows():
