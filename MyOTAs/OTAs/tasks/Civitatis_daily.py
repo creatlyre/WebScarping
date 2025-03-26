@@ -80,8 +80,10 @@ for city in cities:
     df_global = scraper.scrape_products(products_count=products_count, global_category=True)
     df_global['category'] = "Global"  # Label as 'Global' for reference
     scraper.save_to_csv(df_global)
-
+    skip_category = True # as of know skip category -- create new logic to wait for cateogry to be processed tehre is modal window appearing in the category some time to time 
     # Scrape for Each Category in the City 
+    if skip_category == True:
+        continue
     if city in config['settings']:
         category_data = config['settings'][city]  # Get category mapping
 
@@ -99,7 +101,6 @@ for city in cities:
                 logger.logger_error.error(f"Error getting product count for {category_name} ({category_id}) in {city}: {e}")
                 continue
                 
-
             df_category = scraper.scrape_products(products_count=products_count, global_category=False)
             df_category['category'] = category_name  # Assign category name for reference
 
