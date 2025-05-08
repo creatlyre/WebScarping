@@ -395,19 +395,25 @@ class ScraperGYG(ScraperBase):
                 if not price_element:
                     raise ElementNotFoundError('activity-price')
 
-                discount_elements = price_element.find_all('div', {'class': 'activity-price__text'})
+                price = price_element.find_all('span', {'class': 'c-text-atom c-text-atom--body-compact-strong activity-price__text-price'})
 
-                discount_texts = [el.get_text(strip=True) for el in discount_elements if el.get_text(strip=True)]
-                self.logger.logger_info.debug(f"Extracted discount elements: {discount_texts}")
-
-                if len(discount_texts) == 2:
-                    product_data[2] = discount_texts[0]  # price
-                    product_data[5] = discount_texts[1]  # discount
-                elif len(discount_texts) == 1:
-                    product_data[2] = discount_texts[0]  # price
-                    product_data[5] = "N/A"  # discount
-                else:
-                    raise PriceExtractionError("Unexpected number of discount elements.")
+                try:
+                    old_pirce = price_element.find('span', {'class': 'c-text-atom c-text-atom--caption activity-price__old-price'})
+                    if old_pirce:
+                        old_price_text = safe_get_text(old_pirce, 'activity-price__old-price')
+                        price_text = safe_get_text(price[0], 'activity-price__text-price')
+                        product_data[2] = old_price_text # price
+                        product_data[5] = price_text # discount
+                        self.logger.logger_info.debug(f"Extracted old price: {old_price_text}")
+                    elif price:
+                        price_text = safe_get_text(price[0], 'activity-price__text-price')
+                        product_data[5] = price_text # price
+                        product_data[5] = "N/A"  # discount                    
+                    else:
+                        raise PriceExtractionError("Unexpected number of discount elements.")
+                except (ElementNotFoundError, IndexError) as e:
+                    self.logger.logger_err.error(f"Error extracting price or discount: {e}")
+                    raise PriceExtractionError("Price or discount element not found.")
 
                 self.logger.logger_info.debug(f"Extracted price: {product_data[2]}")
                 self.logger.logger_info.debug(f"Extracted discount: {product_data[5]}")

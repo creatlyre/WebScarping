@@ -70,8 +70,8 @@ class ViatorScraper:
         self.css_currency_button = '[data-automation="currency"]'
         self.css_currency_list = 'button[class*="currencyRow"]'
         self.css_date_picker = 'input[data-automation="availability-date-picker-input"]'
-        self.css_calendar_overlay = 'div[data-automation="availability-date-picker-overlay"]'
-
+        self.css_calendar_overlay = '[data-automation="availability-date-picker-overlay"]'
+        
         self.css_calendar_next_month_button = 'button[data-automation="availability-date-picker-calendar-next"]'
         self.css_calendar_month_current = 'div[class*="caption"]'
 
@@ -413,7 +413,6 @@ class ViatorScraper:
             await self.log_html_content(context_info="Failed to click date picker")
             raise self.logger.logger_err.error(f"Failed to click date picker: {e}")
             
-            
 
     async def select_date_in_calendar(self, date, date_str):
         try:
@@ -482,34 +481,66 @@ class ViatorScraper:
             await self.save_data_to_excel(df_temp)
     async def adjust_number_of_travelers(self):
         try:
-            travelers_input = await self.page.querySelector(self.css_travelers_input)
-            if travelers_input:
-                await travelers_input.click()
-                num_adults_current_text = await (await travelers_input.getProperty('value')).jsonValue()
-                num_adults_current = int(num_adults_current_text.split()[0])
-                if num_adults_current > self.num_adults:
-                    decrease_button = await self.page.querySelector(self.css_decrease_button)
-                    for _ in range(num_adults_current - self.num_adults):
-                        await decrease_button.click()
-                        await asyncio.sleep(0.5)
-                elif num_adults_current < self.num_adults:
-                    increase_button = await self.page.querySelector(self.css_increase_button)
-                    for _ in range(self.num_adults - num_adults_current):
-                        await increase_button.click()
-                        await asyncio.sleep(1)
+            self.logger.logger_info.info("Starting adjustment of number of travelers...")
 
-                await self.page.waitForSelector(self.css_apply_button, timeout=5000)
+            travelers_input = await self.page.querySelector(self.css_travelers_input)
+            if not travelers_input:
+                self.logger.logger_err.error(f"Travelers input box not found. Selector used: {self.css_travelers_input}")
+                return
+
+            await travelers_input.click()
+            self.logger.logger_info.info("Clicked on travelers input field.")
+
+            # Get current number of adults
+            try:
+                value_handle = await travelers_input.getProperty('value')
+                num_adults_current_text = await value_handle.jsonValue()
+                num_adults_current = int(num_adults_current_text.split()[0])
+                self.logger.logger_info.info(f"Current number of adults: {num_adults_current}")
+            except Exception as e:
+                self.logger.logger_err.error(f"Failed to retrieve current number of adults: {e}")
+                return
+
+            # Adjust number of adults
+            if num_adults_current > self.num_adults:
+                self.logger.logger_info.info(f"Decreasing number of adults from {num_adults_current} to {self.num_adults}")
+                decrease_button = await self.page.querySelector(self.css_decrease_button)
+                if not decrease_button:
+                    self.logger.logger_err.error(f"Decrease button not found. Selector: {self.css_decrease_button}")
+                    return
+                for i in range(num_adults_current - self.num_adults):
+                    await decrease_button.click()
+                    self.logger.logger_info.debug(f"Clicked decrease button {i + 1} time(s)")
+                    await asyncio.sleep(1.5)
+
+            elif num_adults_current < self.num_adults:
+                self.logger.logger_info.info(f"Increasing number of adults from {num_adults_current} to {self.num_adults}")
+                increase_button = await self.page.querySelector(self.css_increase_button)
+                if not increase_button:
+                    self.logger.logger_err.error(f"Increase button not found. Selector: {self.css_increase_button}")
+                    return
+                for i in range(self.num_adults - num_adults_current):
+                    await increase_button.click()
+                    self.logger.logger_info.debug(f"Clicked increase button {i + 1} time(s)")
+                    await asyncio.sleep(1.5)
+            else:
+                self.logger.logger_info.info("Number of adults is already set correctly.")
+
+            # Click apply button
+            try:
+                await self.page.waitForSelector(self.css_apply_button, timeout=25000)
                 apply_button = await self.page.querySelector(self.css_apply_button)
                 if apply_button:
                     await apply_button.click()
-                    self.logger.logger_info.info(f"Set number of adults to {self.num_adults}")
+                    self.logger.logger_info.info(f"Successfully set number of adults to {self.num_adults}")
                 else:
-                    self.logger.logger_err.error("Apply button not found.")
-            else:
-                self.logger.logger_err.error("Travelers input box not found.")
+                    self.logger.logger_err.error(f"Apply button not found. Selector: {self.css_apply_button}")
+            except Exception as e:
+                self.logger.logger_err.error(f"Error while waiting for/applying the apply button: {e}")
+
         except Exception as e:
-            self.logger.logger_err.error(f"Failed to adjust number of adults to {self.num_adults}: {e}")
-    
+            self.logger.logger_err.exception(f"Unexpected error during traveler adjustment to {self.num_adults}: {e}")
+
     async def check_modal_prompt_not_available_day(self, date_str):
         try:
             modal_window = await self.page.querySelector(self.css_react_modal_not_available_for_selected_travelers)
@@ -752,7 +783,7 @@ class ViatorScraper:
                 'x': 0,
                 'y': 0,
                 'width': viewport_width,
-                'height': viewport_height * 2 # / 2  # Top half
+                'height': viewport_height # / 2  # Top half
             }
             
             # Generate a unique filename
