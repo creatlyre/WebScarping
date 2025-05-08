@@ -1661,8 +1661,7 @@ class HistoricalReportGenerator:
             'footer-right': 'Page [page] of [toPage]',
             'footer-font-size': '9',
             'footer-spacing': '5',
-        }
-
+            }
         # Generate PDF
         try:
             pdfkit.from_string(html_content, output_filename, options=options, configuration=config)
@@ -1781,11 +1780,11 @@ class HistoricalReportGenerator:
             # Generate PDF file name based on 'Tytul'
             random_uuid = str(random.randint(1000, 9999))
             if viewer:
-                output_filename = f"PDF_reports/" + viewer + "_" + self.sanitize_filename(report_title) + "_" + random_uuid +'.pdf'
+                output_filename = f"{project_root}/PDF_reports/" + viewer + "_" + self.sanitize_filename(report_title) + "_" + random_uuid +'.pdf'
                 current_year_month = datetime.now().strftime('%Y-%m')
                 self.title_report =  f"{current_year_month}_{self.sanitize_filename(report_title)}"
             else:
-                output_filename = "PDF_reports/" + self.sanitize_filename(report_title) + "_" + random_uuid + '.pdf'
+                output_filename = f"{project_root}/PDF_reports/" + self.sanitize_filename(report_title) + "_" + random_uuid + '.pdf'
 
             # Prepare introduction text
             introduction_text = (

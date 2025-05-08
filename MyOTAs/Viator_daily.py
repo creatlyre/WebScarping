@@ -36,7 +36,7 @@ import csv
 # File paths
 date_today = datetime.date.today().strftime("%Y-%m-%d")
 DEBUG = False
-# date_today = '2025-03-05'
+# date_today = '2025-05-04'
 output_viator = r'G:/.shortcut-targets-by-id/1ER8hilqZ2TuX2C34R3SMAtd1Xbk94LE2/MyOTAs/Baza Excel/Viator/Daily'
 archive_folder = fr'{output_viator}/Archive'
 file_path_done =fr'{output_viator}/{date_today}-DONE-Viator.csv'  

@@ -153,6 +153,9 @@ def extract_options(driver, option_details, activity_title, language, adults_amo
                 except:
                     try:
                         option_price_total = option.find_element(By.CSS_SELECTOR,'[class*="activity-option-price-wrapper__price"]').text
+
+                        if len(option_price_total.split('\n')) > 1:
+                            option_price_total = option.find_element(By.CSS_SELECTOR,'[class*="activity-option-price-wrapper__price activity-option-price-wrapper__price--discounted"]').text                            
                     except:
                         try:
                             option_price_total = option.find_element(By.CLASS_NAME, 'activity-option__cart-message-text--future-availability').text
@@ -161,7 +164,7 @@ def extract_options(driver, option_details, activity_title, language, adults_amo
             except Exception as e:
                 logger.logger_err.info(f"Error parsing price: {e}")
                 raise e
-            if 'next' not in option_price_total.lower():
+            if 'next' not in option_price_total.lower() and option_price_total != '':
                 option_price_per_person = float(option_price_total.replace('€', '').replace(',', '').strip()) / float(adults_amount)
             else:
                 option_price_per_person = 'Not Available'

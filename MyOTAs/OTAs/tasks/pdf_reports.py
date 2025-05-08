@@ -122,7 +122,7 @@ for index, row in df_to_process.iterrows():
     # Convert the overview to an HTML-compatible string
     overview_html = "<br>".join(historical_review.overview)
     # Define the HTML filename based on the viewer
-    filename = f"PDF_reports\{viewer}_summary.html"
+    filename = f"{project_root}\PDF_reports\{viewer}_summary.html"
     generate_html_summary(filename=filename)
     # Update only the current row's status
     df.at[index, 'Status'] = 'Done'
