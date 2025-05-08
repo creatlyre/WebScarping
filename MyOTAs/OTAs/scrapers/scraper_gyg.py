@@ -398,7 +398,7 @@ class ScraperGYG(ScraperBase):
                 price = price_element.find_all('span', {'class': 'c-text-atom c-text-atom--body-compact-strong activity-price__text-price'})
 
                 try:
-                    old_pirce = price_element.find('span', {'class': 'c-text-atom c-text-atom--caption activity-price__old-price'})
+                    old_pirce = price_element.find('del')
                     if old_pirce:
                         old_price_text = safe_get_text(old_pirce, 'activity-price__old-price')
                         price_text = safe_get_text(price[0], 'activity-price__text-price')
@@ -407,7 +407,7 @@ class ScraperGYG(ScraperBase):
                         self.logger.logger_info.debug(f"Extracted old price: {old_price_text}")
                     elif price:
                         price_text = safe_get_text(price[0], 'activity-price__text-price')
-                        product_data[5] = price_text # price
+                        product_data[2] = price_text # price
                         product_data[5] = "N/A"  # discount                    
                     else:
                         raise PriceExtractionError("Unexpected number of discount elements.")
