@@ -830,8 +830,6 @@ def main():
             url = item['url']
             viewer = item["viewer"]
             url_processed = False
-            if viewer != 'Naples Bay':
-                continue
             for config in item['configurations']:
                 adults = config['adults']
                 language = config['language']
