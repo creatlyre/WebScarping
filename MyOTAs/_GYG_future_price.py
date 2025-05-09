@@ -365,7 +365,7 @@ def get_future_price(driver, url, viewer, city, language, adults_amount, max_day
 
                     day_date_str = f"{current_month} {day}, {current_year}"
                     day_date_obj = datetime.datetime.strptime(day_date_str, '%B %d, %Y')
-                        if date_today_obj <= day_date_obj <= picked_max_date_obj:
+                    if date_today_obj <= day_date_obj <= picked_max_date_obj:
                         if is_done and day_date_obj.date() >= max_date_done:
                             days_to_complete.append(day_date_str)
                         elif not is_done:
@@ -841,6 +841,7 @@ def main():
             url = item['url']
             viewer = item['viewer']
             city = item['city']
+
             for cfg in item['configurations']:
                 adults = cfg['adults']
                 language = cfg['language']

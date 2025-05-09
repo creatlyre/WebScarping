@@ -249,6 +249,12 @@ class ViatorScraper:
     async def handle_currency(self):
         try:
             currency_language_button = await self.page.querySelector(self.css_currency_language_button)
+            current_code = await self.page.evaluate("(el) => el.dataset.currencyCode",currency_language_button)   
+            self.logger.logger_info.debug(f"Current currency code: {current_code}")
+
+            if current_code.upper() == "EUR":
+                self.logger.logger_info.info("Currency already set to EUR—nothing to do.")
+                return
             if currency_language_button:
                 await currency_language_button.click()
                 await asyncio.sleep(random.uniform(1, 3))
@@ -390,33 +396,25 @@ class ViatorScraper:
 
     async def click_date_picker(self):
         try:
-            await self.page.waitForSelector(self.css_date_picker)
-            date_picker = await self.page.querySelector(self.css_date_picker)
-            ### Retrieve and save the top half of the page after clicking
-            # await self.take_top_half_screenshot(context_info="Before_click_date_picker")
-            # await self.log_html_content(context_info="Before_click_date_picker")
-            
-            if date_picker:
-                await date_picker.click()
-                await self.page.waitForSelector(self.css_calendar_overlay)
-                ## Retrieve and save the top half of the page after clicking
-                # await self.take_top_half_screenshot(context_info="After_click_date_picker")
-                # ## Log HTML content after clicking the date picker
-                # await self.log_html_content(context_info="After_click_date_picker")
+            # wait until the date‐picker input is in the DOM and visible
+            await self.page.waitForSelector(self.css_date_picker, visible=True, timeout=35_000)
+            # click via the high‐level API (will scroll into view and fire all events)
+            await self.page.click(self.css_date_picker)
 
+            # now wait for the calendar overlay to appear
+            await self.page.waitForSelector(self.css_calendar_overlay, visible=True, timeout=20_000)
 
-            else:
-                self.logger.logger_err.error("Date picker not found.")
         except Exception as e:
+            # capture state for debugging
             await self.take_top_half_screenshot(context_info="Failed to click date picker")
-            ## Log HTML content after clicking the date picker
             await self.log_html_content(context_info="Failed to click date picker")
+            # re‐raise with your logger
             raise self.logger.logger_err.error(f"Failed to click date picker: {e}")
-            
+                
 
     async def select_date_in_calendar(self, date, date_str):
         try:
-            self.page.waitForSelector(self.css_calendar_overlay)
+            await self.page.waitForSelector(self.css_calendar_overlay)
             calendar_overlay = await self.page.querySelector(self.css_calendar_overlay)
             if calendar_overlay:
                 # inner_html = await self.page.evaluate('(element) => element.innerHTML', calendar_overlay)
@@ -483,63 +481,52 @@ class ViatorScraper:
         try:
             self.logger.logger_info.info("Starting adjustment of number of travelers...")
 
-            travelers_input = await self.page.querySelector(self.css_travelers_input)
-            if not travelers_input:
-                self.logger.logger_err.error(f"Travelers input box not found. Selector used: {self.css_travelers_input}")
-                return
-
-            await travelers_input.click()
+            # 1) Click the input to open the panel, then wait for the panel to appear
+            await self.page.waitForSelector(self.css_travelers_input, visible=True, timeout=10_000)
+            await self.page.click(self.css_travelers_input)
             self.logger.logger_info.info("Clicked on travelers input field.")
 
-            # Get current number of adults
-            try:
-                value_handle = await travelers_input.getProperty('value')
-                num_adults_current_text = await value_handle.jsonValue()
-                num_adults_current = int(num_adults_current_text.split()[0])
-                self.logger.logger_info.info(f"Current number of adults: {num_adults_current}")
-            except Exception as e:
-                self.logger.logger_err.error(f"Failed to retrieve current number of adults: {e}")
-                return
+            # assume the decrease/increase buttons live in a popup—you must wait for that popup
+            await self.page.waitForSelector(self.css_decrease_button, visible=True, timeout=30_000)
 
-            # Adjust number of adults
-            if num_adults_current > self.num_adults:
-                self.logger.logger_info.info(f"Decreasing number of adults from {num_adults_current} to {self.num_adults}")
-                decrease_button = await self.page.querySelector(self.css_decrease_button)
-                if not decrease_button:
-                    self.logger.logger_err.error(f"Decrease button not found. Selector: {self.css_decrease_button}")
-                    return
-                for i in range(num_adults_current - self.num_adults):
-                    await decrease_button.click()
-                    self.logger.logger_info.debug(f"Clicked decrease button {i + 1} time(s)")
-                    await asyncio.sleep(1.5)
+            # 2) Read current value
+            value_handle = await self.page.querySelector(self.css_travelers_input)
+            num_adults_current = int(
+                (await (await value_handle.getProperty("value")).jsonValue()).split()[0]
+            )
+            self.logger.logger_info.info(f"Current number of adults: {num_adults_current}")
 
-            elif num_adults_current < self.num_adults:
-                self.logger.logger_info.info(f"Increasing number of adults from {num_adults_current} to {self.num_adults}")
-                increase_button = await self.page.querySelector(self.css_increase_button)
-                if not increase_button:
-                    self.logger.logger_err.error(f"Increase button not found. Selector: {self.css_increase_button}")
-                    return
-                for i in range(self.num_adults - num_adults_current):
-                    await increase_button.click()
-                    self.logger.logger_info.debug(f"Clicked increase button {i + 1} time(s)")
-                    await asyncio.sleep(1.5)
+            # 3) Click +/- as needed
+            delta = self.num_adults - num_adults_current
+            if delta > 0:
+                btn_selector = self.css_increase_button
+                verb = "Increasing"
+            elif delta < 0:
+                btn_selector = self.css_decrease_button
+                verb = "Decreasing"
             else:
                 self.logger.logger_info.info("Number of adults is already set correctly.")
+                # still need to close/apply the panel
+                delta = 0
 
-            # Click apply button
-            try:
-                await self.page.waitForSelector(self.css_apply_button, timeout=25000)
-                apply_button = await self.page.querySelector(self.css_apply_button)
-                if apply_button:
-                    await apply_button.click()
-                    self.logger.logger_info.info(f"Successfully set number of adults to {self.num_adults}")
-                else:
-                    self.logger.logger_err.error(f"Apply button not found. Selector: {self.css_apply_button}")
-            except Exception as e:
-                self.logger.logger_err.error(f"Error while waiting for/applying the apply button: {e}")
+            if delta != 0:
+                self.logger.logger_info.info(f"{verb} number of adults by {abs(delta)} step(s)")
+                # re-query the button each loop in case DOM re-renders
+                for i in range(abs(delta)):
+                    await self.page.waitForSelector(btn_selector, visible=True, timeout=5_000)
+                    await self.page.click(btn_selector)
+                    self.logger.logger_info.debug(f"Clicked {verb.lower()} button {i + 1} time(s)")
+                    await asyncio.sleep(0.5)
+
+            # 4) Wait for & click the Apply button
+            await self.page.waitForSelector(self.css_apply_button, visible=True, timeout=25_000)
+            await self.page.click(self.css_apply_button)
+            self.logger.logger_info.info(f"Successfully set number of adults to {self.num_adults}")
 
         except Exception as e:
-            self.logger.logger_err.exception(f"Unexpected error during traveler adjustment to {self.num_adults}: {e}")
+            self.logger.logger_err.exception(
+                f"Unexpected error during traveler adjustment to {self.num_adults}: {e}"
+        )
 
     async def check_modal_prompt_not_available_day(self, date_str):
         try:
@@ -843,6 +830,8 @@ def main():
             url = item['url']
             viewer = item["viewer"]
             url_processed = False
+            if viewer != 'Naples Bay':
+                continue
             for config in item['configurations']:
                 adults = config['adults']
                 language = config['language']
